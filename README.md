@@ -34,18 +34,10 @@ python app.py
 
 컨테이너 배포 시 `Dockerfile`로 빌드합니다. 앱은 8765번 포트를 사용하며 영구 볼륨을 `/data`에 마운트합니다. 컨테이너 사용자 UID 10001이 볼륨에 쓸 수 있어야 합니다. 플랫폼에서 `PORT`를 주입하면 해당 포트를 사용합니다.
 
-### Vercel 프런트엔드
-
-GitHub 저장소를 새 Vercel 프로젝트에 가져옵니다. 루트 디렉터리는 저장소 루트를 사용합니다. Vercel은 대시보드 정적 파일과 API 전달 함수를 호스팅합니다. 수집과 OCR, 자동 일정 및 영구 데이터는 위 컨테이너를 실행하는 별도 서버에서 관리합니다. Vercel 프로젝트의 환경 변수 `PICASSO_BACKEND_URL`에 해당 서버의 HTTPS 주소를 등록합니다. 컨테이너에 팀 로그인 설정을 적용하고, Vercel 프로젝트에도 팀 배포 보호를 적용할 수 있습니다. Vercel을 경유하는 기준 이미지 업로드는 4 MB 이하 파일을 사용하세요.
-
-수집 서버를 연결하면 브라우저에서 초기 집계, 상품 썸네일, 수집 일정 저장, CSV 내보내기를 확인합니다. GitHub의 `main` 변경은 가져온 Vercel 프로젝트에서 자동 배포할 수 있습니다.
-
-### Supabase 저장소
-
-`supabase/migrations/`의 SQL을 프로젝트에 적용하면 수집 작업·상품 테이블과 비공개 이미지 버킷이 생성됩니다. Vercel 서버 환경 변수로 `SUPABASE_URL`과 `SUPABASE_SERVICE_ROLE_KEY`를 설정합니다. 비밀 키는 브라우저에 전달하지 않습니다. 검증 데이터가 초기화된 경우 Vercel 미리보기는 Supabase에 저장된 상품 행을 읽습니다. 수집 서버가 연결되기 전에는 기존 집계 조회만 지원합니다.
-
 ### Vercel 수동 수집
 
-프로덕션에서는 같은 Vercel 프로젝트의 컨테이너가 목록, OCR, 분류, 이미지 처리를 맡고 Vercel Queues가 처리 배치를 전달합니다. 상품과 실행 기록은 Supabase Postgres에 저장되고, 수집한 이미지는 비공개 Storage 버킷에 저장됩니다. Vercel 프로덕션에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PICASSO_WORKER_KEY`, `PICASSO_OPERATOR_PASSWORD`가 필요합니다. 자동 실행은 보류 상태이고, 운영자는 한국 시간 기준 예정 시각만 저장할 수 있습니다.
+저장소 루트의 `vercel.json`이 같은 프로젝트에 대시보드 컨테이너와 Vercel Queues 요청·소비 서비스를 배포합니다. 운영자 로그인 후 **지금 수집**을 선택하면 상품 목록, OCR, 이미지 분류, 결과 저장이 백그라운드에서 진행됩니다. 큐 메시지가 재전달되어도 수집 ID·브랜드·상품 ID가 같은 결과는 한 번만 저장됩니다.
 
-수집이 완료되면 상품 수와 함께 판독 실패를 확인할 수 있습니다. Vercel은 각 메시지를 재전달할 수 있으므로 결과를 수집 ID·브랜드·상품 ID로 중복 제거합니다. 기존 외부 서버 방식의 정적 미리보기 빌드는 `python3 build-vercel.py`로 로컬에서 만들 수 있습니다.
+Supabase 프로젝트에 `supabase/migrations/`를 적용합니다. 상품과 수집 기록은 Postgres에 저장하고, 수집한 썸네일과 운영자가 등록한 기준 이미지는 비공개 Storage 버킷에 저장합니다. 초기 검증 샘플의 썸네일은 브랜드 CDN에서 불러옵니다.
+
+Vercel 프로덕션 환경에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PICASSO_WORKER_KEY`, `PICASSO_OPERATOR_PASSWORD`를 설정합니다. 키와 암호는 서버 환경에만 보관합니다. 자동 실행은 보류 상태이며, 운영자는 한국 시간 기준 예정 시각을 저장할 수 있습니다. 기준 이미지 업로드는 4 MB 이하 파일을 사용합니다.
