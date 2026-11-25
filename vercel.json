@@ -3,22 +3,44 @@
     "dashboard": {
       "root": ".",
       "runtime": "container",
-      "entrypoint": "Dockerfile",
-      "command": ["python", "-m", "waitress", "--listen=0.0.0.0:80", "--threads=4", "cloud_app:app"]
+      "entrypoint": "Dockerfile"
     },
     "dispatch": {
       "root": "dispatch",
-      "bindings": [{"type":"service","service":"dashboard","format":"url","env":"PICASSO_CONTAINER_URL"}],
-      "functions": {
-        "api/consume.mjs": {
-          "maxDuration": 300,
-          "experimentalTriggers": [{"type":"queue/v2beta","topic":"picasso-collection"}]
+      "bindings": [
+        {
+          "type": "service",
+          "service": "dashboard",
+          "format": "url",
+          "env": "PICASSO_CONTAINER_URL"
         }
-      }
+      ],
+      "functions": {
+        "app/api/queues/consume/route.js": {
+          "maxDuration": 300,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "picasso-collection"
+            }
+          ]
+        }
+      },
+      "framework": "nextjs"
     }
   },
   "rewrites": [
-    {"source":"/api/collect","destination":{"service":"dispatch"}},
-    {"source":"/(.*)","destination":{"service":"dashboard"}}
+    {
+      "source": "/api/collect",
+      "destination": {
+        "service": "dispatch"
+      }
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "dashboard"
+      }
+    }
   ]
 }
