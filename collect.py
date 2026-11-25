@@ -11,7 +11,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import quote, urljoin, urlsplit
+from urllib.parse import parse_qs, quote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps
@@ -118,7 +118,7 @@ class WhoDetailImages(HTMLParser):
             self.depth -= 1
 
 
-def who_code(url, budget=0):
+def who_image_code(url, budget):
     deadline = time.monotonic() + budget if budget else float("inf")
 
     def remaining(limit):
@@ -190,6 +190,55 @@ def who_code(url, budget=0):
     if errors and not inspected:
         raise errors[0]
     return ""
+
+
+def who_product_id(url):
+    target = urlsplit(url)
+    match = re.match(r"/product/[^/]+/([0-9]+)(?:/|$)", target.path)
+    if match:
+        return match[1]
+    if target.path == "/product/detail.html":
+        values = parse_qs(target.query).get("product_no", [])
+        if len(values) == 1 and re.fullmatch(r"[0-9]+", values[0]):
+            return values[0]
+    return None
+
+
+def who_mobile_tag_code(url):
+    target = urlsplit(url)
+    product_id = who_product_id(url)
+    if (not product_id or target.scheme != "https"
+            or target.hostname not in {"whoau.com", "www.whoau.com", "m.whoau.com"}):
+        return ""
+    mobile = target._replace(netloc="m.whoau.com", fragment="").geturl()
+    try:
+        source = fetch(mobile).decode()
+    except (OSError, ValueError):
+        return ""
+
+    # Match the requested product's official page before using its own tag list.
+    canonical = re.search(r'<link\b[^>]*\brel="canonical"[^>]*\bhref="([^"]+)"', source)
+    if not canonical or who_product_id(unescape(canonical[1])) != product_id:
+        return ""
+    tags = re.search(r'<div\b[^>]*\bclass="[^"]*\bxans-product-hashtag\b[^"]*"[^>]*>'
+                     r'.*?<ul\b[^>]*>(.*?)</ul>', source, re.DOTALL)
+    if not tags:
+        return ""
+    codes = {text for keyword, text in re.findall(
+        r'<a\b[^>]*\bhref="/product/search\.html\?keyword=([^"]+)"[^>]*>\s*#([^<>]+)</a>', tags[1])
+        if keyword == text and WHO_CODE.fullmatch(text)}
+    return codes.pop() if len(codes) == 1 else ""
+
+
+def who_code(url, budget=0):
+    try:
+        code = who_image_code(url, budget)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        code = who_mobile_tag_code(url)
+        if code:
+            return code
+        raise
+    return code or who_mobile_tag_code(url)
 
 
 def list_products():
