@@ -21,7 +21,8 @@
           "experimentalTriggers": [
             {
               "type": "queue/v2beta",
-              "topic": "picasso-collection"
+              "topic": "picasso-collection",
+              "maxConcurrency": 3
             }
           ]
         }
