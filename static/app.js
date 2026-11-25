@@ -126,7 +126,7 @@ async function sync(initial = false) {
       try {
         state = await api("/api/state");
       } catch (error) {
-        if (error.status !== 503 || location.pathname !== "/index.html") throw error;
+        if (error.status !== 503 || !["/", "/index.html"].includes(location.pathname)) throw error;
         demo = await api("/demo.json");
       }
     }

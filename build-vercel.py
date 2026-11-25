@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 from shutil import copyfile
@@ -17,4 +18,10 @@ demo = {"state": {"runs": [summary], "job": {"state": "idle"},
                   "reference": False, "vision": False},
         "run": dict(summary, products=run["products"])}
 (output / "demo.json").write_text(json.dumps(demo, ensure_ascii=False), encoding="utf-8")
-copyfile("seed/thumbnails.csv", output / "demo.csv")
+with (output / "demo.csv").open("w", encoding="utf-8-sig", newline="") as file:
+    writer = csv.DictWriter(file, fieldnames=[
+        "brand", "tabs", "product_id", "name", "code", "thumbnail_type",
+        "similarity", "thumbnail_url", "list_url"
+    ], extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(dict(row, tabs="|".join(row["tabs"])) for row in run["products"])
