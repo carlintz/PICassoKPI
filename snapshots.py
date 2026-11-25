@@ -11,8 +11,8 @@ TABS = {"SPAO": {"우먼": 2605000005, "맨": 2605000008},
 def seed_snapshot():
     with (ROOT / "seed/whoau-women.csv").open(encoding="utf-8-sig") as f:
         comparisons = {row["product_id"]: row["visual_assessment"] for row in csv.DictReader(f)}
-    codes = {"5801": "WHLAH1191U", "5811": "WHTMH1222U",
-             "5808": "WHYJH2251U", "5813": "WHMWH1153U"}
+    with (ROOT / "seed/whoau-codes.csv").open(encoding="utf-8") as f:
+        codes = {row["product_id"]: row["code"] for row in csv.DictReader(f)}
     rows = []
     with (ROOT / "seed/thumbnails.csv").open(encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):

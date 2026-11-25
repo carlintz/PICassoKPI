@@ -76,8 +76,20 @@ def snapshot(run_id=None):
 
 def seed():
     path = DATA / "run-20261124-000000-seed.json"
+    baseline = seed_snapshot()
     if not path.exists():
-        save(path, seed_snapshot())
+        save(path, baseline)
+        return
+    run = load(path)
+    codes = {r["product_id"]: r["code"] for r in baseline["products"]
+             if r["brand"] == "WHO" and r["code"]}
+    changed = False
+    for row in run["products"]:
+        if row["brand"] == "WHO" and not row["code"] and row["product_id"] in codes:
+            row.update(code=codes[row["product_id"]], code_status="found")
+            changed = True
+    if changed:
+        save(path, run)
 
 
 def options():

@@ -1,25 +1,40 @@
 import csv
 import io
 import json
+import os
 import re
 import subprocess
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from html import unescape
+from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.error import HTTPError
+from urllib.parse import quote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps
 
 from snapshots import SPAO, WHO, TABS
 
-WHO_CODE = re.compile(r"\bWH[A-Z0-9]{7,12}\b")
+WHO_CODE = re.compile(r"\bWH[A-Z]{3}[0-9][A-Z0-9]{3}[A-Z]\b")
 
 
 def fetch(url):
-    with urlopen(Request(url, headers={"User-Agent": "PICassoKPI/1.0"}), timeout=18) as response:
-        body = response.read(20_000_001)
+    target = urlsplit(url)
+    url = target._replace(path=quote(target.path, safe="/%:@!$&'()*+,;="),
+                          query=quote(target.query, safe="%=&+/:?@!$'()*;,")).geturl()
+    request = Request(url, headers={"User-Agent": "PICassoKPI/1.0"})
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=18) as response:
+                body = response.read(20_000_001)
+            break
+        except HTTPError as error:
+            if attempt or error.code not in (502, 503, 504):
+                raise
+            time.sleep(1)
     if len(body) > 20_000_000:
         raise ValueError("Response exceeded 20 MB")
     return body
@@ -70,21 +85,58 @@ def who_list(tab, category):
                        f"{WHO}/product/detail.html?product_no={product_id}")
 
 
+class WhoDetailImages(HTMLParser):
+    """Read the lazy images displayed when the detail panel expands."""
+
+    def __init__(self, url):
+        super().__init__()
+        self.url = url
+        self.depth = 0
+        self.images = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "div":
+            if self.depth or attrs.get("id") in {"prdDetailContent", "prdDetailContentLazy"}:
+                self.depth += 1
+        if tag == "img" and self.depth:
+            for field in ("ec-data-src", "data-src", "src"):
+                if not attrs.get(field):
+                    continue
+                url = urljoin(self.url, attrs[field])
+                target = urlsplit(url)
+                if target.scheme == "https" and target.hostname == "item-imghub.eland.co.kr":
+                    if url not in self.images:
+                        self.images.append(url)
+                    break
+
+    def handle_endtag(self, tag):
+        if tag == "div" and self.depth:
+            self.depth -= 1
+
+
 def who_code(url):
-    source = fetch(url).decode()
-    block = source.split('id="prdDetailContent"', 1)[1].split("</div>", 1)[0]
-    images = [unescape(u) for u in re.findall(r'(?:ec-data-src|src)="([^"]+)"', block)
-              if urlsplit(u).hostname == "item-imghub.eland.co.kr"]
+    detail = WhoDetailImages(url)
+    detail.feed(fetch(url).decode())
+    images = sorted(detail.images, key=lambda image: "-EXTRA-" not in image)
+    errors = []
+    inspected = 0
+    ocr_env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / "code.png"
-        for url in images[:2]:
-            with Image.open(io.BytesIO(fetch(url))) as picture:
-                image = ImageOps.autocontrast(picture.convert("L"))
+        for url in images[:4]:
+            try:
+                with Image.open(io.BytesIO(fetch(url))) as picture:
+                    image = ImageOps.autocontrast(picture.convert("L"))
+            except (OSError, ValueError) as error:
+                errors.append(error)
+                continue
+            inspected += 1
             if image.height > 4000:
                 image = image.crop((0, 0, image.width, int(image.height * .28)))
             image.save(path)
             layout = subprocess.run(["tesseract", str(path), "stdout", "tsv"],
-                                    capture_output=True, text=True, timeout=15, check=True)
+                                    capture_output=True, text=True, timeout=20, check=True, env=ocr_env)
             words = list(csv.DictReader(io.StringIO(layout.stdout), delimiter="\t"))
             codes = set(WHO_CODE.findall(" ".join(w["text"] or "" for w in words).upper()))
             if len(codes) == 1:
@@ -99,10 +151,12 @@ def who_code(url):
                     continue
                 ImageOps.autocontrast(band).save(path)
                 run = subprocess.run(["tesseract", str(path), "stdout", "--psm", "7"],
-                                     capture_output=True, text=True, timeout=12, check=True)
+                                     capture_output=True, text=True, timeout=15, check=True, env=ocr_env)
                 codes = set(WHO_CODE.findall(run.stdout.upper()))
                 if len(codes) == 1:
                     return codes.pop()
+    if errors and not inspected:
+        raise errors[0]
     return ""
 
 
