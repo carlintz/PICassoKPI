@@ -3,8 +3,21 @@
   "buildCommand": "mkdir -p public/static && cp static/index.html public/index.html && cp static/app.js static/style.css public/static/",
   "outputDirectory": "public",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/backend" },
-    { "source": "/images/:path*", "destination": "/api/backend" },
-    { "source": "/seed-images/:path*", "destination": "/api/backend" }
+    {
+      "source": "/",
+      "destination": "/api/backend?route="
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/backend?route=api/:path*"
+    },
+    {
+      "source": "/images/:path*",
+      "destination": "/api/backend?route=images/:path*"
+    },
+    {
+      "source": "/seed-images/:path*",
+      "destination": "/api/backend?route=seed-images/:path*"
+    }
   ]
 }

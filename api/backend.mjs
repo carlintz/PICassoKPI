@@ -1,22 +1,25 @@
 const paths = [
+  /^\/$/,
   /^\/api\/(state|collect|schedule|reference)$/,
   /^\/api\/runs\/[\w-]+(?:\/(?:csv|product))?$/,
   /^\/images\/[\w-]+\/[\w-]+\.jpg$/,
   /^\/seed-images\/(?:SPAO|WHO)\/\d+$/
 ];
 
-export default async function handler(request) {
+async function handler(request) {
   const backend = process.env.PICASSO_BACKEND_URL;
   if (!backend) {
     return Response.json({error: "수집 서버 URL이 아직 설정되지 않았습니다."}, {status: 503});
   }
-  const {pathname} = new URL(request.url);
+  const url = new URL(request.url);
+  const route = url.searchParams.get("route");
+  const pathname = route === null ? url.pathname : "/" + route;
   if (!paths.some(pattern => pattern.test(pathname))) {
     return Response.json({error: "지원하지 않는 경로입니다."}, {status: 404});
   }
 
-  const origin = new URL(backend);
-  if (origin.protocol !== "https:" || origin.username || origin.password) {
+  const origin = URL.canParse(backend) ? new URL(backend) : null;
+  if (!origin || origin.protocol !== "https:" || origin.username || origin.password) {
     return Response.json({error: "수집 서버의 HTTPS 주소를 확인하세요."}, {status: 503});
   }
   const headers = new Headers();
@@ -41,3 +44,5 @@ export default async function handler(request) {
     return Response.json({error: "수집 서버에 연결하지 못했습니다."}, {status: 502});
   }
 }
+
+export {handler as GET, handler as HEAD, handler as POST, handler as PATCH};
