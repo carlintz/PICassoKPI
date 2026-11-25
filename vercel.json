@@ -8,7 +8,6 @@
     },
     "dispatch": {
       "root": "dispatch",
-      "framework": null,
       "bindings": [{"type":"service","service":"dashboard","format":"url","env":"PICASSO_CONTAINER_URL"}],
       "functions": {
         "api/consume.mjs": {
