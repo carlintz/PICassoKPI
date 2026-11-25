@@ -26,7 +26,7 @@ python app.py
 - 스파오 품번은 상품명 끝에서 추출합니다. 후아유는 상세 이미지에서 OCR로 추출합니다. 상품 검토 페이지에서 썸네일 분류, 유사도, 품번을 수정할 수 있습니다.
 - 첫 실행에는 2026년 11월 24일 검증 샘플 874개를 표시합니다. 새 자동 유사도 집계를 시작하려면 기준 얼굴 이미지를 등록합니다. 샘플에는 일부 상품의 가격과 후아유 품번이 비어 있습니다.
 
-수집에는 공식몰 `www.spao.com`, `whoau.com`과 이미지 호스트 `spao-item.elandrs.com`, `cafe24.poxo.com`, `item-imghub.eland.co.kr`의 HTTPS 접근이 필요합니다. 모델 설치에는 `media.githubusercontent.com` 접근이 필요합니다.
+수집에는 공식몰 `www.spao.com`, `whoau.com`과 이미지 호스트 `spao-item.elandrs.com`, `cafe24.poxo.com`, `item-imghub.eland.co.kr`, `item.elandrs.com`의 HTTPS 접근이 필요합니다. 모델 설치에는 `media.githubusercontent.com` 접근이 필요합니다.
 
 ## 호스팅
 

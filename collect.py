@@ -18,6 +18,7 @@ from PIL import Image, ImageOps
 
 from snapshots import SPAO, WHO, TABS
 
+WHO_DETAIL_IMAGE_HOSTS = {"item-imghub.eland.co.kr", "item.elandrs.com"}
 WHO_CODE = re.compile(r"\bWH[A-Z]{3}[0-9][A-Z0-9]{3}[A-Z]\b")
 
 
@@ -105,7 +106,9 @@ class WhoDetailImages(HTMLParser):
                     continue
                 url = urljoin(self.url, attrs[field])
                 target = urlsplit(url)
-                if target.scheme == "https" and target.hostname == "item-imghub.eland.co.kr":
+                cafe24_detail = (target.hostname == "cafe24.poxo.com"
+                                 and re.match(r"/ec\d+/whoaukr/.+/_/web/upload/NNEditor/", target.path))
+                if target.scheme == "https" and (target.hostname in WHO_DETAIL_IMAGE_HOSTS or cafe24_detail):
                     if url not in self.images:
                         self.images.append(url)
                     break
@@ -123,24 +126,25 @@ def who_code(url, budget=0):
 
     detail = WhoDetailImages(url)
     detail.feed(fetch(url).decode())
-    images = sorted(detail.images, key=lambda image: "-EXTRA-" not in image)
+    images = sorted(detail.images,
+                    key=lambda url: not any(marker in url for marker in ("-EXTRA-", "_detail_page1.")))
     errors = []
     inspected = 0
     ocr_env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / "code.png"
-        for url in images[:4]:
+        for url in images[:6]:
             if time.monotonic() >= deadline:
                 raise TimeoutError("detail OCR time limit reached")
             try:
                 with Image.open(io.BytesIO(fetch(url))) as picture:
-                    image = ImageOps.autocontrast(picture.convert("L"))
+                    image = picture.convert("L")
             except (OSError, ValueError) as error:
                 errors.append(error)
                 continue
             inspected += 1
             if image.height > 4000:
-                image = image.crop((0, 0, image.width, int(image.height * .28)))
+                image = image.crop((0, 0, image.width, 3500))
             image.save(path)
             layout = subprocess.run(["tesseract", str(path), "stdout", "tsv"],
                                     capture_output=True, text=True, timeout=remaining(20), check=True, env=ocr_env)
@@ -148,20 +152,27 @@ def who_code(url, budget=0):
             codes = set(WHO_CODE.findall(" ".join(w["text"] or "" for w in words).upper()))
             if len(codes) == 1:
                 return codes.pop()
-            # Try the lighter line immediately below the largest title lines.
-            lines = [w for w in words if w["level"] == "4"]
-            for line in sorted(lines, key=lambda w: int(w["height"]), reverse=True)[:3]:
+            # Read the small, often light-gray style code directly under the title.
+            lines = [w for w in words if w["level"] == "4" and 18 <= int(w["height"]) <= image.width * .12]
+            for line in sorted(lines, key=lambda word: int(word["height"]), reverse=True)[:4]:
                 bottom = int(line["top"]) + int(line["height"])
-                band = image.crop((0, bottom, round(image.width * .7),
-                                   min(image.height, bottom + round(image.width * .14))))
-                if not band.height:
-                    continue
-                ImageOps.autocontrast(band).save(path)
-                run = subprocess.run(["tesseract", str(path), "stdout", "--psm", "7"],
-                                     capture_output=True, text=True, timeout=remaining(15), check=True, env=ocr_env)
-                codes = set(WHO_CODE.findall(run.stdout.upper()))
-                if len(codes) == 1:
-                    return codes.pop()
+                for top_scale, end_scale, width_scale in ((.008, .065, .42), (0, .085, .62)):
+                    top = bottom + round(image.width * top_scale)
+                    end = min(image.height, bottom + round(image.width * end_scale))
+                    if end <= top:
+                        continue
+                    band = ImageOps.autocontrast(image.crop((0, top, round(image.width * width_scale), end)))
+                    band.resize((band.width * 2, band.height * 2), Image.Resampling.LANCZOS).save(path)
+                    run = subprocess.run(["tesseract", str(path), "stdout", "--psm", "7"],
+                                         capture_output=True, text=True, timeout=remaining(15), check=True, env=ocr_env)
+                    text = run.stdout.upper().strip()
+                    compact = re.sub(r"\s+", "", text)
+                    if WHO_CODE.fullmatch(compact):
+                        return compact
+                    codes = set(WHO_CODE.findall(text))
+                    if len(codes) == 1:
+                        return codes.pop()
+
     if errors and not inspected:
         raise errors[0]
     return ""
