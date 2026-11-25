@@ -137,8 +137,10 @@ def who_code(url, budget=0):
             if time.monotonic() >= deadline:
                 raise TimeoutError("detail OCR time limit reached")
             try:
-                with Image.open(io.BytesIO(fetch(url))) as picture:
+                content = fetch(url)
+                with Image.open(io.BytesIO(content)) as picture:
                     image = picture.convert("L")
+                    rescan = picture.width > 1000 or picture.height > 12000
             except (OSError, ValueError) as error:
                 errors.append(error)
                 continue
@@ -172,6 +174,18 @@ def who_code(url, budget=0):
                     codes = set(WHO_CODE.findall(text))
                     if len(codes) == 1:
                         return codes.pop()
+
+            if rescan:
+                with Image.open(io.BytesIO(content)) as alternate:
+                    alternate.thumbnail((1000, 12000))
+                    if alternate.height > 3500:
+                        alternate = alternate.crop((0, 0, alternate.width, 3500))
+                    alternate.convert("RGB").save(path, format="JPEG")
+                scan = subprocess.run(["tesseract", str(path), "stdout"], capture_output=True,
+                                      text=True, timeout=remaining(15), check=True, env=ocr_env)
+                codes = set(WHO_CODE.findall(scan.stdout.upper()))
+                if len(codes) == 1:
+                    return codes.pop()
 
     if errors and not inspected:
         raise errors[0]
