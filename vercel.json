@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "mkdir -p public/static && cp static/index.html public/index.html && cp static/app.js static/style.css public/static/",
+  "buildCommand": "mkdir -p public/static && cp static/app.js static/style.css public/static/",
   "outputDirectory": "public",
   "rewrites": [
     {
