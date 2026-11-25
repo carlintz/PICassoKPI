@@ -12,10 +12,8 @@ from urllib.request import Request, urlopen
 
 from PIL import Image, ImageOps
 
-SPAO = "https://www.spao.com"
-WHO = "https://whoau.com"
-TABS = {"SPAO": {"우먼": 2605000005, "맨": 2605000008},
-        "WHO": {"WOMEN": 25, "MEN": 24}}
+from snapshots import SPAO, WHO, TABS
+
 WHO_CODE = re.compile(r"\bWH[A-Z0-9]{7,12}\b")
 
 

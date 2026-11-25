@@ -7,15 +7,17 @@ const paths = [
 ];
 
 async function handler(request) {
-  const backend = process.env.PICASSO_BACKEND_URL;
-  if (!backend) {
-    return Response.json({error: "수집 서버 URL이 아직 설정되지 않았습니다."}, {status: 503});
-  }
   const url = new URL(request.url);
   const route = url.searchParams.get("route");
   const pathname = route === null ? url.pathname : "/" + route;
   if (!paths.some(pattern => pattern.test(pathname))) {
     return Response.json({error: "지원하지 않는 경로입니다."}, {status: 404});
+  }
+
+  const backend = process.env.PICASSO_BACKEND_URL;
+  if (!backend) {
+    if (pathname === "/") return Response.redirect(new URL("/index.html", request.url), 302);
+    return Response.json({error: "수집 서버 URL이 아직 설정되지 않았습니다."}, {status: 503});
   }
 
   const origin = URL.canParse(backend) ? new URL(backend) : null;

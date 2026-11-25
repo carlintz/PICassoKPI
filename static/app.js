@@ -7,14 +7,18 @@ const brands = {SPAO: "스파오", WHO: "후아유"};
 const kinds = {model: "모델 착장컷", product_only: "상품 단독컷", unknown: "미분류"};
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
-let state, current, editing, page = 0, lastJob, syncing = false;
+let demo, state, current, editing, page = 0, lastJob, syncing = false;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
   if (options.method && options.method !== "GET") headers.set("X-PICasso-Request", "1");
   const response = await fetch(url, {...options, headers});
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "요청을 처리하지 못했습니다.");
+  if (!response.ok) {
+    const error = new Error(data.error || "요청을 처리하지 못했습니다.");
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 function send(url, payload, method = "POST") {
@@ -41,10 +45,11 @@ function go() {
 }
 async function select(id) {
   if (!id) return;
-  const result = await api("/api/runs/" + encodeURIComponent(id));
+  const result = demo ? demo.run : await api("/api/runs/" + encodeURIComponent(id));
   current = result;
   $("runs").value = id;
-  $("export").href = "/api/runs/" + encodeURIComponent(id) + "/csv";
+  $("export").href = demo ? "/demo.csv" : "/api/runs/" + encodeURIComponent(id) + "/csv";
+  if (demo) $("export").download = "picasso-demo.csv";
   page = 0;
   render();
 }
@@ -74,6 +79,7 @@ function render() {
   gallery();
 }
 function imageUrl(row) {
+  if (demo) return row.thumbnail_url;
   if (current.id === "20261124-000000-seed") {
     return `/seed-images/${encodeURIComponent(row.brand)}/${encodeURIComponent(row.product_id)}`;
   }
@@ -109,18 +115,33 @@ function edit(row) {
   $("edit-type").value = row.thumbnail_type;
   $("edit-sim").value = row.similarity;
   $("edit-sim").disabled = row.brand !== "WHO" || !row.tabs.includes("WOMEN");
+  $("review").querySelector('button[type="submit"], button.primary').disabled = Boolean(demo);
   $("edit").showModal();
 }
 async function sync(initial = false) {
   if (syncing) return;
   syncing = true;
   try {
-    state = await api("/api/state");
+    if (!demo) {
+      try {
+        state = await api("/api/state");
+      } catch (error) {
+        if (error.status !== 503 || location.pathname !== "/index.html") throw error;
+        demo = await api("/demo.json");
+      }
+    }
+    if (demo) {
+      state = demo.state;
+      for (const id of ["schedule", "reference"]) {
+        $(id).querySelectorAll("input, button").forEach(input => { input.disabled = true; });
+      }
+    }
     const {job, runs, schedule} = state;
     const selected = current?.id;
     $("runs").innerHTML = runs.map(r => `<option value="${esc(r.id)}">${esc(date(r.at))} · ${esc(r.source)}</option>`).join("");
     $("runs").value = selected || runs[0]?.id || "";
-    $("collect").disabled = job.state === "running";
+    $("collect").disabled = Boolean(demo) || job.state === "running";
+    if (demo) notice("검증 데이터 미리보기 · 수집 서버 연결 후 새 수집과 설정 변경을 사용할 수 있습니다.");
     $("collect").textContent = job.state === "running" ? "수집 중…" : "↻ 지금 수집";
     if (job.state === "running") notice(job.total ? `수집·분류 중 ${job.done} / ${job.total}개` : job.message);
     if (job.state === "failed" && job.state !== lastJob) notice(job.message, true);

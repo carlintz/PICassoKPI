@@ -1,6 +1,6 @@
 {
   "framework": null,
-  "buildCommand": "mkdir -p public/static && cp static/app.js static/style.css public/static/",
+  "buildCommand": "python3 build-vercel.py",
   "outputDirectory": "public",
   "rewrites": [
     {
