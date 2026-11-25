@@ -127,7 +127,20 @@ async function sync(initial = false) {
         state = await api("/api/state");
       } catch (error) {
         if (error.status !== 503 || !["/", "/index.html"].includes(location.pathname)) throw error;
-        demo = await api("/demo.json");
+        const [baseline, storage] = await Promise.all([
+          api("/demo.json"),
+          api("/api/seed-products").catch(() => null)
+        ]);
+        demo = baseline;
+        if (storage) {
+          const key = row => row.brand + ":" + row.product_id;
+          const products = new Map(storage.products.map(row => [key(row), row]));
+          if (products.size === demo.run.products.length &&
+              demo.run.products.every(row => products.has(key(row)))) {
+            demo.run.products = demo.run.products.map(row => products.get(key(row)));
+            demo.run.source += " · Supabase";
+          }
+        }
       }
     }
     if (demo) {
