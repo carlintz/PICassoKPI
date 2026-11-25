@@ -1,10 +1,6 @@
 .local/
 .venv/
 __pycache__/
-app.py
-serve.py
-collect.py
-vision.py
-requirements.txt
-Dockerfile
-setup-models.sh
+.env*
+public/
+supabase/.temp/

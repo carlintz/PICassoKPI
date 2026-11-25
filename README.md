@@ -43,3 +43,9 @@ GitHub 저장소를 새 Vercel 프로젝트에 가져옵니다. 루트 디렉터
 ### Supabase 저장소
 
 `supabase/migrations/`의 SQL을 프로젝트에 적용하면 수집 작업·상품 테이블과 비공개 이미지 버킷이 생성됩니다. Vercel 서버 환경 변수로 `SUPABASE_URL`과 `SUPABASE_SERVICE_ROLE_KEY`를 설정합니다. 비밀 키는 브라우저에 전달하지 않습니다. 검증 데이터가 초기화된 경우 Vercel 미리보기는 Supabase에 저장된 상품 행을 읽습니다. 수집 서버가 연결되기 전에는 기존 집계 조회만 지원합니다.
+
+### Vercel 수동 수집
+
+프로덕션에서는 같은 Vercel 프로젝트의 컨테이너가 목록, OCR, 분류, 이미지 처리를 맡고 Vercel Queues가 처리 배치를 전달합니다. 상품과 실행 기록은 Supabase Postgres에 저장되고, 수집한 이미지는 비공개 Storage 버킷에 저장됩니다. Vercel 프로덕션에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PICASSO_WORKER_KEY`, `PICASSO_OPERATOR_PASSWORD`가 필요합니다. 자동 실행은 보류 상태이고, 운영자는 한국 시간 기준 예정 시각만 저장할 수 있습니다.
+
+수집이 완료되면 상품 수와 함께 판독 실패를 확인할 수 있습니다. Vercel은 각 메시지를 재전달할 수 있으므로 결과를 수집 ID·브랜드·상품 ID로 중복 제거합니다. 기존 외부 서버 방식의 정적 미리보기 빌드는 `python3 build-vercel.py`로 로컬에서 만들 수 있습니다.

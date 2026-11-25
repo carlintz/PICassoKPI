@@ -7,7 +7,7 @@ const brands = {SPAO: "스파오", WHO: "후아유"};
 const kinds = {model: "모델 착장컷", product_only: "상품 단독컷", unknown: "미분류"};
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
-let demo, state, current, editing, page = 0, lastJob, syncing = false;
+let demo, state, current, editing, page = 0, lastJob, syncing = false, collectAfterLogin = false;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -115,7 +115,7 @@ function edit(row) {
   $("edit-type").value = row.thumbnail_type;
   $("edit-sim").value = row.similarity;
   $("edit-sim").disabled = row.brand !== "WHO" || !row.tabs.includes("WOMEN");
-  $("review").querySelector('button[type="submit"], button.primary').disabled = Boolean(demo);
+  $("review").querySelector('button[type="submit"], button.primary').disabled = Boolean(demo) || state.operator === false;
   $("edit").showModal();
 }
 async function sync(initial = false) {
@@ -154,6 +154,15 @@ async function sync(initial = false) {
     $("runs").innerHTML = runs.map(r => `<option value="${esc(r.id)}">${esc(date(r.at))} · ${esc(r.source)}</option>`).join("");
     $("runs").value = selected || runs[0]?.id || "";
     $("collect").disabled = Boolean(demo) || job.state === "running";
+    $("operator-login").hidden = state.operator !== false;
+    if (!demo) {
+      $("schedule").querySelector("button").disabled = state.operator === false;
+      $("reference").querySelector("button").disabled = state.operator === false;
+      $("enabled").disabled = Boolean(state.scheduling_paused);
+      if (state.scheduling_paused) {
+        $("schedule-note").textContent = "자동 실행 보류 중 · 한국 시간 기준 시각을 저장할 수 있습니다.";
+      }
+    }
     if (demo) notice("검증 데이터 미리보기 · 수집 서버 연결 후 새 수집과 설정 변경을 사용할 수 있습니다.");
     $("collect").textContent = job.state === "running" ? "수집 중…" : "↻ 지금 수집";
     if (job.state === "running") notice(job.total ? `수집·분류 중 ${job.done} / ${job.total}개` : job.message);
@@ -184,7 +193,34 @@ $("history").onclick = e => {
   const id = e.target.closest("[data-run]")?.dataset.run;
   if (id) action(() => select(id));
 };
-$("collect").onclick = () => action(async () => { await send("/api/collect", {}); await sync(); });
+async function collectNow() {
+  await send("/api/collect", {});
+  await sync();
+}
+function openLogin(startCollection) {
+  collectAfterLogin = startCollection;
+  $("login-error").textContent = "";
+  $("login-form").reset();
+  $("login-dialog").showModal();
+}
+$("operator-login").onclick = () => openLogin(false);
+$("close-login").onclick = () => $("login-dialog").close();
+$("login-form").onsubmit = async e => {
+  e.preventDefault();
+  const input = $("operator-password");
+  try {
+    await send("/api/login", {password: input.value});
+    input.value = "";
+    $("login-dialog").close();
+    await action(async () => {
+      await sync();
+      if (collectAfterLogin) await collectNow();
+    });
+  } catch (error) {
+    $("login-error").textContent = error.message;
+  }
+};
+$("collect").onclick = () => state?.operator === false ? openLogin(true) : action(collectNow);
 $("similar-link").onclick = () => { $("tab-filter").value = "WHO:WOMEN"; $("kind-filter").value = "similar"; $("search").value = ""; page = 0; gallery(); };
 for (const id of ["search", "tab-filter", "kind-filter"]) $(id).oninput = () => { page = 0; gallery(); };
 $("gallery").onclick = e => {

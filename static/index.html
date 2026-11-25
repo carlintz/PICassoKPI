@@ -16,7 +16,7 @@
 </aside>
 <main>
   <header><div><p class="eyebrow">PICASSO / 상품 콘텐츠</p><h1 id="title">신상품 썸네일 현황</h1></div>
-    <div class="actions"><a class="button" id="export">↓ CSV</a><button id="collect" class="primary">↻ 지금 수집</button></div>
+    <div class="actions"><button id="operator-login" hidden>운영자 로그인</button><a class="button" id="export">↓ CSV</a><button id="collect" class="primary">↻ 지금 수집</button></div>
   </header>
   <div id="notice" role="status" hidden></div>
   <section id="overview">
@@ -38,7 +38,7 @@
     <div id="gallery"></div><div id="pagination"></div>
   </section>
   <section id="settings" hidden class="split">
-    <article class="panel"><div class="panel-title"><div><h2>자동 수집</h2><p>서버 실행 중 매일 지정한 시각에 수집합니다.</p></div></div>
+    <article class="panel"><div class="panel-title"><div><h2>자동 수집</h2><p id="schedule-note">매일 지정한 시각에 수집합니다.</p></div></div>
       <form id="schedule"><label class="field"><span>매일 자동 수집</span><input id="enabled" type="checkbox"></label><label class="field"><span>수집 시각 · 한국 시간</span><input id="time" type="time" required></label><button class="primary">저장</button></form>
     </article>
     <article class="panel"><div class="panel-title"><div><h2>기준 얼굴 이미지</h2><p>후아유 WOMEN의 새 수집 결과에 적용됩니다.</p></div></div>
@@ -46,6 +46,14 @@
     </article>
   </section>
 </main>
+<dialog id="login-dialog">
+<form id="login-form">
+  <div class="panel-title"><h2>운영자 로그인</h2><button type="button" id="close-login" aria-label="닫기">×</button></div>
+  <label class="field">운영자 암호 <input id="operator-password" type="password" autocomplete="current-password" required></label>
+  <p id="login-error" role="alert"></p>
+  <button class="primary">로그인</button>
+</form>
+</dialog>
 <dialog id="edit"><form id="review"><div class="panel-title"><h2 id="edit-name"></h2><button type="button" id="close" aria-label="닫기">×</button></div>
 <img id="edit-image" alt="대표 썸네일"><a id="detail" target="_blank" rel="noopener">공식몰에서 보기 ↗</a><p id="item-error"></p>
 <label class="field">브랜드 품번 <input id="edit-code"></label>

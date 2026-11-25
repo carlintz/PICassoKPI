@@ -1,23 +1,25 @@
 {
-  "framework": null,
-  "buildCommand": "python3 build-vercel.py",
-  "outputDirectory": "public",
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "/api/backend?route="
+  "services": {
+    "dashboard": {
+      "root": ".",
+      "runtime": "container",
+      "entrypoint": "Dockerfile",
+      "command": ["python", "-m", "waitress", "--listen=0.0.0.0:80", "--threads=4", "cloud_app:app"]
     },
-    {
-      "source": "/api/:path*",
-      "destination": "/api/backend?route=api/:path*"
-    },
-    {
-      "source": "/images/:path*",
-      "destination": "/api/backend?route=images/:path*"
-    },
-    {
-      "source": "/seed-images/:path*",
-      "destination": "/api/backend?route=seed-images/:path*"
+    "dispatch": {
+      "root": "dispatch",
+      "framework": null,
+      "bindings": [{"type":"service","service":"dashboard","format":"url","env":"PICASSO_CONTAINER_URL"}],
+      "functions": {
+        "api/consume.mjs": {
+          "maxDuration": 300,
+          "experimentalTriggers": [{"type":"queue/v2beta","topic":"picasso-collection"}]
+        }
+      }
     }
+  },
+  "rewrites": [
+    {"source":"/api/collect","destination":{"service":"dispatch"}},
+    {"source":"/(.*)","destination":{"service":"dashboard"}}
   ]
 }

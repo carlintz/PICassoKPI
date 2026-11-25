@@ -115,7 +115,12 @@ class WhoDetailImages(HTMLParser):
             self.depth -= 1
 
 
-def who_code(url):
+def who_code(url, budget=0):
+    deadline = time.monotonic() + budget if budget else float("inf")
+
+    def remaining(limit):
+        return min(limit, max(0.1, deadline - time.monotonic()))
+
     detail = WhoDetailImages(url)
     detail.feed(fetch(url).decode())
     images = sorted(detail.images, key=lambda image: "-EXTRA-" not in image)
@@ -125,6 +130,8 @@ def who_code(url):
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / "code.png"
         for url in images[:4]:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("detail OCR time limit reached")
             try:
                 with Image.open(io.BytesIO(fetch(url))) as picture:
                     image = ImageOps.autocontrast(picture.convert("L"))
@@ -136,7 +143,7 @@ def who_code(url):
                 image = image.crop((0, 0, image.width, int(image.height * .28)))
             image.save(path)
             layout = subprocess.run(["tesseract", str(path), "stdout", "tsv"],
-                                    capture_output=True, text=True, timeout=20, check=True, env=ocr_env)
+                                    capture_output=True, text=True, timeout=remaining(20), check=True, env=ocr_env)
             words = list(csv.DictReader(io.StringIO(layout.stdout), delimiter="\t"))
             codes = set(WHO_CODE.findall(" ".join(w["text"] or "" for w in words).upper()))
             if len(codes) == 1:
@@ -151,7 +158,7 @@ def who_code(url):
                     continue
                 ImageOps.autocontrast(band).save(path)
                 run = subprocess.run(["tesseract", str(path), "stdout", "--psm", "7"],
-                                     capture_output=True, text=True, timeout=15, check=True, env=ocr_env)
+                                     capture_output=True, text=True, timeout=remaining(15), check=True, env=ocr_env)
                 codes = set(WHO_CODE.findall(run.stdout.upper()))
                 if len(codes) == 1:
                     return codes.pop()
@@ -160,7 +167,7 @@ def who_code(url):
     return ""
 
 
-def collect(classifier, previous, directory, update, workers=6):
+def list_products():
     products = {}
     def read_tab(brand, tab, category):
         loader = spao_list if brand == "SPAO" else who_list
@@ -179,43 +186,51 @@ def collect(classifier, previous, directory, update, workers=6):
     if not products:
         raise ValueError("No products received")
 
-    def process(row):
-        key = (row["brand"], row["product_id"])
-        old = previous.get(key, {})
-        row.update(thumbnail_type="unknown", similarity="unscanned", score=None,
-                   code_status="missing", error="", image_file="")
-        messages = []
-        if row["brand"] == "WHO" and old.get("code"):
-            row["code"] = old["code"]
+    return list(products.values())
+
+
+def process_product(row, classifier, old, directory, ocr_budget=0):
+    row.update(thumbnail_type="unknown", similarity="unscanned", score=None,
+               code_status="missing", error="", image_file="")
+    messages = []
+    if row["brand"] == "WHO" and old.get("code"):
+        row["code"] = old["code"]
+    try:
+        with Image.open(io.BytesIO(fetch(row["thumbnail_url"]))) as im:
+            picture = ImageOps.exif_transpose(im).convert("RGB")
+        picture.thumbnail((900, 1200))
+        filename = f"{row['brand']}-{int(row['product_id'])}.jpg"
+        picture.save(directory / filename, quality=90)
+        row["image_file"] = filename
+        row.update(classifier.classify(picture, "WOMEN" in row["tabs"]))
+        if old.get("thumbnail_url") == row["thumbnail_url"] and old.get("reviewed"):
+            row["thumbnail_type"] = old["thumbnail_type"]
+            row["reviewed"] = True
+            if not classifier.reference_changed:
+                row["similarity"] = old["similarity"]
+            if row["thumbnail_type"] != "model":
+                row.update(similarity="not_applicable", score=None)
+    except Exception as error:
+        messages.append(f"썸네일: {error}")
+    if row["brand"] == "WHO" and not row["code"]:
         try:
-            with Image.open(io.BytesIO(fetch(row["thumbnail_url"]))) as im:
-                picture = ImageOps.exif_transpose(im).convert("RGB")
-            picture.thumbnail((900, 1200))
-            filename = f"{row['brand']}-{int(row['product_id'])}.jpg"
-            picture.save(directory / filename, quality=90)
-            row["image_file"] = filename
-            row.update(classifier.classify(picture, "WOMEN" in row["tabs"]))
-            if old.get("thumbnail_url") == row["thumbnail_url"] and old.get("reviewed"):
-                row["thumbnail_type"] = old["thumbnail_type"]
-                row["reviewed"] = True
-                if not classifier.reference_changed:
-                    row["similarity"] = old["similarity"]
-                if row["thumbnail_type"] != "model":
-                    row.update(similarity="not_applicable", score=None)
+            row["code"] = who_code(row["detail_url"], ocr_budget)
         except Exception as error:
-            messages.append(f"썸네일: {error}")
-        if row["brand"] == "WHO" and not row["code"]:
-            try:
-                row["code"] = who_code(row["detail_url"])
-            except Exception as error:
-                messages.append(f"품번: {error}")
-        row["code_status"] = "found" if row["code"] else "missing"
-        row["error"] = " · ".join(messages)
-        return row
+            messages.append(f"품번: {error}")
+    row["code_status"] = "found" if row["code"] else "missing"
+    row["error"] = " · ".join(messages)
+    return row
+
+
+def collect(classifier, previous, directory, update, workers=6):
+    products = list_products()
+
+    def process(row):
+        return process_product(row, classifier, previous.get((row["brand"], row["product_id"]), {}), directory)
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         result = []
-        for row in pool.map(process, products.values()):
+        for row in pool.map(process, products):
             result.append(row)
             if len(result) % 10 == 0 or len(result) == len(products):
                 update(len(result), len(products))
