@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PICasso KPI</title><link rel="stylesheet" href="/static/style.css"><script defer src="/static/app.js"></script>
+</head>
+<body>
+<aside>
+  <a class="brand" href="#overview"><b>Pi</b><span>PICasso<small>KPI MONITOR</small></span></a>
+  <nav aria-label="메뉴">
+    <a href="#overview" data-page="overview"><span>◫</span> 대시보드</a>
+    <a href="#products" data-page="products"><span>▤</span> 상품 검토</a>
+    <a href="#settings" data-page="settings"><span>⚙</span> 수집 설정</a>
+  </nav>
+  <div class="aside-footer"><i></i><span>SPAO · WHO.A.U</span></div>
+</aside>
+<main>
+  <header><div><p class="eyebrow">PICASSO / 상품 콘텐츠</p><h1 id="title">신상품 썸네일 현황</h1></div>
+    <div class="actions"><a class="button" id="export">↓ CSV</a><button id="collect" class="primary">↻ 지금 수집</button></div>
+  </header>
+  <div id="notice" role="status" hidden></div>
+  <section id="overview">
+    <div class="scope"><label>집계 기록 <select id="runs" aria-label="집계 기록"></select></label><p id="source"></p></div>
+    <div id="metrics" class="metrics"></div>
+    <article class="panel"><div class="panel-title"><div><h2>브랜드별 썸네일 구성</h2><p>얼굴이 보이는 썸네일을 모델 착장컷으로 집계합니다.</p></div><div class="legend"><span><i></i>상품 단독컷</span><span><i></i>모델 착장컷</span><span><i></i>미분류</span></div></div><div id="bars"></div></article>
+    <div class="split">
+      <article class="panel"><div class="panel-title"><div><h2>후아유 WOMEN · 기준 얼굴</h2><p>시각적 유사도 집계</p></div><a href="#products" id="similar-link">상품 보기 →</a></div><div class="comparison" id="comparison"></div></article>
+      <article class="panel"><div class="panel-title"><div><h2>최근 집계</h2><p>수집 시점별 상품 수와 착장컷 비중</p></div></div><div id="history"></div></article>
+    </div>
+  </section>
+  <section id="products" hidden>
+    <div class="filters panel">
+      <input id="search" type="search" placeholder="상품명, ID 또는 품번" aria-label="상품 검색">
+      <select id="tab-filter" aria-label="브랜드와 탭"><option value="">모든 브랜드 · 탭</option><option value="SPAO">스파오</option><option value="SPAO:우먼">스파오 우먼</option><option value="SPAO:맨">스파오 맨</option><option value="WHO">후아유</option><option value="WHO:WOMEN">후아유 WOMEN</option><option value="WHO:MEN">후아유 MEN</option></select>
+      <select id="kind-filter" aria-label="썸네일 분류"><option value="">모든 분류</option><option value="product_only">상품 단독컷</option><option value="model">모델 착장컷</option><option value="similar">기준 얼굴 유사</option><option value="unclear">유사도 검토 필요</option><option value="unknown">미분류</option><option value="missing">품번 미확인</option></select>
+      <span id="filtered"></span>
+    </div>
+    <div id="gallery"></div><div id="pagination"></div>
+  </section>
+  <section id="settings" hidden class="split">
+    <article class="panel"><div class="panel-title"><div><h2>자동 수집</h2><p>서버 실행 중 매일 지정한 시각에 수집합니다.</p></div></div>
+      <form id="schedule"><label class="field"><span>매일 자동 수집</span><input id="enabled" type="checkbox"></label><label class="field"><span>수집 시각 · 한국 시간</span><input id="time" type="time" required></label><button class="primary">저장</button></form>
+    </article>
+    <article class="panel"><div class="panel-title"><div><h2>기준 얼굴 이미지</h2><p>후아유 WOMEN의 새 수집 결과에 적용됩니다.</p></div></div>
+      <form id="reference"><p id="reference-status"></p><input type="file" name="image" accept="image/*" required><button class="primary">기준 이미지 저장</button></form>
+    </article>
+  </section>
+</main>
+<dialog id="edit"><form id="review"><div class="panel-title"><h2 id="edit-name"></h2><button type="button" id="close" aria-label="닫기">×</button></div>
+<img id="edit-image" alt="대표 썸네일"><a id="detail" target="_blank" rel="noopener">공식몰에서 보기 ↗</a><p id="item-error"></p>
+<label class="field">브랜드 품번 <input id="edit-code"></label>
+<label class="field">썸네일 분류 <select id="edit-type"><option value="product_only">상품 단독컷</option><option value="model">모델 착장컷</option><option value="unknown">미분류</option></select></label>
+<label class="field">얼굴 유사도 <select id="edit-sim"><option value="unscanned">미확인</option><option value="similar">유사</option><option value="other">기타</option><option value="unclear">검토 필요</option><option value="not_applicable">해당 없음</option></select></label>
+<button class="primary">분류 저장</button></form></dialog>
+</body></html>
