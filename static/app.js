@@ -10,11 +10,13 @@ const kinds = {
 const generalModels = summary => summary.model - summary.match - summary.unclear;
 const needsReview = summary => summary.unknown + summary.unclear;
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
+const seedId = "20261124-000000-seed";
 const pageSize = 30;
 const selection = new Set();
 let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
 let savingBulk = false;
-let weekly;
+let weekly, weeklyCatalog;
+let weeklyRuns = [];
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -49,7 +51,7 @@ function go() {
   }
   $("title").textContent = titles[active];
   if (active === "products") gallery();
-  if (active === "overview" && current) loadWeekly();
+  if (active === "overview") loadWeekly();
 }
 async function select(id) {
   if (!id) return;
@@ -63,7 +65,6 @@ async function select(id) {
   $("export").href = demo ? "/demo.csv" : "/api/runs/" + encodeURIComponent(id) + "/csv";
   if (demo) $("export").download = "picasso-demo.csv";
   render();
-  if (!$("overview").hidden) loadWeekly();
 }
 function renderMetrics(id, s, isWeekly = false) {
   const metrics = [
@@ -81,28 +82,79 @@ function renderWeekly() {
   if (!data?.summary) return;
   renderMetrics("weekly-metrics", brand ? data.brands[brand] : data.summary, true);
 }
+function weeklyOptions(runs) {
+  return runs.map(run => `<option value="${esc(run.id)}">${esc(date(run.at))}</option>`).join("");
+}
+function updateWeeklyComparison() {
+  const picker = $("weekly-compare");
+  const selected = picker.value;
+  const index = weeklyRuns.findIndex(run => run.id === $("weekly-run").value);
+  const earlier = index < 0 ? [] : weeklyRuns.slice(index + 1);
+  picker.innerHTML = '<option value="">최근 7일 자동 비교</option>' + weeklyOptions(earlier);
+  picker.value = earlier.some(run => run.id === selected) ? selected : "";
+  picker.disabled = !earlier.length;
+}
+async function loadWeeklyCatalog(revision) {
+  const request = {revision};
+  weeklyCatalog = request;
+  weekly = null;
+  $("weekly-run").disabled = true;
+  $("weekly-compare").disabled = true;
+  $("weekly-brand").disabled = true;
+  $("weekly-metrics").hidden = true;
+  $("weekly-status").textContent = "비교할 수집 기록을 확인하는 중입니다.";
+  try {
+    const runs = demo ? [] : (await api("/api/weekly/runs")).runs;
+    if (weeklyCatalog !== request) return;
+    const picker = $("weekly-run");
+    const selected = picker.value;
+    const followLatest = !selected || selected === weeklyRuns[0]?.id;
+    weeklyRuns = runs;
+    picker.innerHTML = weeklyOptions(runs);
+    picker.value = !followLatest && runs.some(run => run.id === selected) ? selected : runs[0]?.id || "";
+    picker.disabled = !runs.length;
+    updateWeeklyComparison();
+    request.ready = true;
+  } catch {
+    if (weeklyCatalog !== request) return;
+    weeklyCatalog = undefined;
+    $("weekly-status").textContent = "수집 기록을 불러오지 못했습니다.";
+  }
+}
 async function loadWeekly() {
-  if (weekly?.run === current) return;
-  const request = {run: current};
+  if (!state || $("overview").hidden) return;
+  const revision = state.runs.find(run => run.id !== seedId)?.id ?? "";
+  if (weeklyCatalog?.revision !== revision) await loadWeeklyCatalog(revision);
+  if (!weeklyCatalog?.ready || $("overview").hidden) return;
+  const run = $("weekly-run").value;
+  const compare = $("weekly-compare").value;
+  if (weekly?.run === run && weekly.compare === compare) return;
+  const request = {run, compare};
   weekly = request;
   $("weekly-brand").disabled = true;
   $("weekly-metrics").hidden = true;
   const status = $("weekly-status");
-  status.textContent = "비교할 수집 기록을 확인하는 중입니다.";
+  if (!run || $("weekly-compare").disabled) {
+    status.textContent = "완료된 공식몰 수집 기록이 두 건 이상이면 비교 결과를 표시합니다.";
+    return;
+  }
+  status.textContent = "신규 상품을 비교하는 중입니다.";
   try {
-    const data = demo ? null : await api(`/api/runs/${encodeURIComponent(current.id)}/weekly`);
-    if (weekly !== request || current !== request.run) return;
+    const query = compare ? `?compare=${encodeURIComponent(compare)}` : "";
+    const data = await api(`/api/runs/${encodeURIComponent(run)}/weekly${query}`);
+    if (weekly !== request) return;
     if (!data?.summary) {
       status.textContent = "완료된 공식몰 수집 기록이 두 건 이상이면 비교 결과를 표시합니다.";
       return;
     }
     request.data = data;
-    status.textContent = `${date(data.start_at)} ~ ${date(data.end_at)} · 스타일코드 확인 상품 기준`;
+    const mode = compare ? "선택 기록 비교" : "최근 7일 자동 비교";
+    status.textContent = `${date(data.start_at)} ~ ${date(data.end_at)} · ${mode} · 스타일코드 확인 상품 기준`;
     $("weekly-brand").disabled = false;
     renderWeekly();
     $("weekly-metrics").hidden = false;
-  } catch (error) {
-    if (weekly === request && current === request.run) status.textContent = "신규 상품 집계를 불러오지 못했습니다.";
+  } catch {
+    if (weekly === request) status.textContent = "신규 상품 집계를 불러오지 못했습니다.";
   }
 }
 function render() {
@@ -128,7 +180,7 @@ function render() {
 }
 function imageUrl(row) {
   if (demo) return row.thumbnail_url;
-  if (current.id === "20261124-000000-seed") {
+  if (current.id === seedId) {
     return `/seed-images/${encodeURIComponent(row.brand)}/${encodeURIComponent(row.product_id)}`;
   }
   return row.image_file ? `/images/${encodeURIComponent(current.id)}/${encodeURIComponent(row.image_file)}` : row.thumbnail_url;
@@ -281,6 +333,7 @@ async function sync(initial = false) {
       if (!$("products").hidden) renderSelection();
     }
     renderReferences();
+    loadWeekly();
   } finally { syncing = false; }
 }
 function renderHistory() {
@@ -292,6 +345,8 @@ async function action(task) {
 }
 window.addEventListener("hashchange", go);
 $("runs").onchange = e => action(() => select(e.target.value));
+$("weekly-run").onchange = () => { updateWeeklyComparison(); loadWeekly(); };
+$("weekly-compare").onchange = loadWeekly;
 $("weekly-brand").onchange = renderWeekly;
 $("history").onclick = e => {
   const id = e.target.closest("[data-run]")?.dataset.run;
@@ -387,6 +442,7 @@ $("bulk-review").onsubmit = async e => {
     renderSelection();
   }
   if (!result) return;
+  weekly = null;
   const message = `${number(result.updated)}개 상품의 분류를 저장했습니다.`;
   try {
     if (current.id === id) await select(id);
@@ -464,6 +520,7 @@ $("review").onsubmit = async e => {
     return;
   }
   if (editing === item) $("edit").close();
+  weekly = null;
   await action(async () => {
     if (current.id === run_id) await select(run_id);
     notice("상품 분류를 저장했습니다.");

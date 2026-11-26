@@ -8,6 +8,7 @@ WHO = "https://whoau.com"
 TABS = {"SPAO": {"우먼": 2605000005, "맨": 2605000008},
         "WHO": {"WOMEN": 25, "MEN": 24}}
 SEED_ID = "20261124-000000-seed"
+INVALID_COMPARISON = "집계 기록보다 이전의 완료된 공식몰 수집 기록을 선택하세요."
 
 
 def seed_snapshot():
@@ -63,8 +64,10 @@ def weekly_public(end_at, window_start, baseline_at=None, products=()):
             "brands": {brand: summarize([p for p in products if p["brand"] == brand]) for brand in TABS}}
 
 
-def local_weekly(run_id, runs):
+def local_weekly(run_id, runs, comparison_id=None):
     if run_id == SEED_ID:
+        if comparison_id:
+            raise ValueError(INVALID_COMPARISON)
         return {"summary": None}
     anchor = next(run for run in runs if run["id"] == run_id)
     through = datetime.fromisoformat(anchor["at"])
@@ -72,6 +75,12 @@ def local_weekly(run_id, runs):
     history = sorted((datetime.fromisoformat(run["at"]), run["id"], run["products"])
                      for run in runs if run["id"] != SEED_ID and
                      (datetime.fromisoformat(run["at"]), run["id"]) <= (through, run_id))
+    if comparison_id:
+        baseline = next((batch for batch in history[:-1] if batch[1] == comparison_id), None)
+        if baseline is None:
+            raise ValueError(INVALID_COMPARISON)
+        start = baseline[0]
+        history = [baseline, history[-1]]
     before = [batch for i, batch in enumerate(history) if i == 0 or batch[0] < start]
     if len(history) < 2:
         return {"summary": None}

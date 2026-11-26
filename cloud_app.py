@@ -21,7 +21,7 @@ import cloud_store as db
 from collect import list_products, process_product
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
 from reviews import apply_review, review_changes
-from snapshots import public, seed_snapshot, weekly_public
+from snapshots import INVALID_COMPARISON, public, seed_snapshot, weekly_public
 from vision import Vision
 
 app = Flask(__name__, static_url_path="/static")
@@ -131,10 +131,26 @@ def results(run_id):
     return jsonify(**public(result), products=result["products"])
 
 
+@app.get("/api/weekly/runs")
+def weekly_runs():
+    runs = db.all_rows("picasso_runs", {"select": "id,created_at", "status": "eq.complete",
+                                       "id": f"neq.{db.BASELINE_ID}", "order": "created_at.desc,id.desc"})
+    return jsonify(runs=[{"id": run["id"], "at": run["created_at"]} for run in runs])
+
+
 @app.get("/api/runs/<run_id>/weekly")
 def weekly(run_id):
     ident = snapshot_id(run_id)
-    result = db.rest("rpc/picasso_weekly_new_products", method="POST", body={"target_run": ident}) if ident else None
+    if not ident:
+        return jsonify(error="수집 기록이 없습니다."), 404
+    compare = request.args.get("compare")
+    comparison = snapshot_id(compare) if compare else None
+    if compare and comparison is None:
+        return jsonify(error=INVALID_COMPARISON), 400
+    result = db.rest("rpc/picasso_weekly_new_products", method="POST",
+                     body={"target_run": ident, "comparison_run": comparison})
+    if result is None and compare:
+        return jsonify(error=INVALID_COMPARISON), 400
     if result is None:
         return jsonify(error="수집 기록이 없습니다."), 404
     return jsonify(weekly_public(**result))
