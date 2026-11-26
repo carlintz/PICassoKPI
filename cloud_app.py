@@ -21,7 +21,7 @@ import cloud_store as db
 from collect import list_products, process_product
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
 from reviews import apply_review, review_changes
-from snapshots import public, seed_snapshot
+from snapshots import public, seed_snapshot, weekly_public
 from vision import Vision
 
 app = Flask(__name__, static_url_path="/static")
@@ -129,6 +129,15 @@ def results(run_id):
         return jsonify(error="수집 기록이 없습니다."), 404
     result = snapshot(run, [row["result"] for row in db.product_rows(ident)])
     return jsonify(**public(result), products=result["products"])
+
+
+@app.get("/api/runs/<run_id>/weekly")
+def weekly(run_id):
+    ident = snapshot_id(run_id)
+    result = db.rest("rpc/picasso_weekly_new_products", method="POST", body={"target_run": ident}) if ident else None
+    if result is None:
+        return jsonify(error="수집 기록이 없습니다."), 404
+    return jsonify(weekly_public(**result))
 
 
 @app.get("/api/runs/<run_id>/csv")

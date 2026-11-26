@@ -14,6 +14,7 @@ const pageSize = 30;
 const selection = new Set();
 let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
 let savingBulk = false;
+let weekly;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -48,6 +49,7 @@ function go() {
   }
   $("title").textContent = titles[active];
   if (active === "products") gallery();
+  if (active === "overview" && current) loadWeekly();
 }
 async function select(id) {
   if (!id) return;
@@ -61,19 +63,53 @@ async function select(id) {
   $("export").href = demo ? "/demo.csv" : "/api/runs/" + encodeURIComponent(id) + "/csv";
   if (demo) $("export").download = "picasso-demo.csv";
   render();
+  if (!$("overview").hidden) loadWeekly();
+}
+function renderMetrics(id, s, isWeekly = false) {
+  const metrics = [
+    [isWeekly ? "신규 상품" : "전체 상품", s.total, isWeekly ? "브랜드·스타일코드별 중복 제외" : "브랜드별 중복 제외"],
+    [kinds.product_only, s.product, pct(s.product, s.total) + (isWeekly ? " · 신규 상품 대비" : " · 전체 대비")],
+    [kinds.model, generalModels(s), pct(generalModels(s), s.model) + " · 전체 모델 착장컷 대비"],
+    [kinds.similar, s.match, pct(s.match, s.model) + " · 전체 모델 착장컷 대비"]
+  ];
+  $(id).innerHTML = metrics.map(([title, count, label]) =>
+    `<div class="metric"><span>${title}</span><strong>${number(count)}</strong><small>${label}</small></div>`).join("");
+}
+function renderWeekly() {
+  const brand = $("weekly-brand").value;
+  const data = weekly?.data;
+  if (!data?.summary) return;
+  renderMetrics("weekly-metrics", brand ? data.brands[brand] : data.summary, true);
+}
+async function loadWeekly() {
+  if (weekly?.run === current) return;
+  const request = {run: current};
+  weekly = request;
+  $("weekly-brand").disabled = true;
+  $("weekly-metrics").hidden = true;
+  const status = $("weekly-status");
+  status.textContent = "비교할 수집 기록을 확인하는 중입니다.";
+  try {
+    const data = demo ? null : await api(`/api/runs/${encodeURIComponent(current.id)}/weekly`);
+    if (weekly !== request || current !== request.run) return;
+    if (!data?.summary) {
+      status.textContent = "완료된 공식몰 수집 기록이 두 건 이상이면 비교 결과를 표시합니다.";
+      return;
+    }
+    request.data = data;
+    status.textContent = `${date(data.start_at)} ~ ${date(data.end_at)} · 스타일코드 확인 상품 기준`;
+    $("weekly-brand").disabled = false;
+    renderWeekly();
+    $("weekly-metrics").hidden = false;
+  } catch (error) {
+    if (weekly === request && current === request.run) status.textContent = "신규 상품 집계를 불러오지 못했습니다.";
+  }
 }
 function render() {
   if (!current) return;
   const s = current.summary;
   $("source").textContent = `${current.source} · ${number(needsReview(s))}개 검토 필요 · ${s.code}/${s.total}개 스타일코드 확인`;
-  const metrics = [
-    ["전체 상품", s.total, "브랜드별 중복 제외"],
-    [kinds.product_only, s.product, pct(s.product, s.total) + " · 전체 대비"],
-    [kinds.model, generalModels(s), pct(generalModels(s), s.model) + " · 전체 모델 착장컷 대비"],
-    [kinds.similar, s.match, pct(s.match, s.model) + " · 전체 모델 착장컷 대비"]
-  ];
-  $("metrics").innerHTML = metrics.map(([title, count, label]) =>
-    `<div class="metric"><span>${title}</span><strong>${number(count)}</strong><small>${label}</small></div>`).join("");
+  renderMetrics("metrics", s);
   $("bars").innerHTML = current.groups.map(g => {
     const label = g.tab || brands[g.brand];
     const counts = [g.product, generalModels(g), g.match, needsReview(g)];
@@ -256,6 +292,7 @@ async function action(task) {
 }
 window.addEventListener("hashchange", go);
 $("runs").onchange = e => action(() => select(e.target.value));
+$("weekly-brand").onchange = renderWeekly;
 $("history").onclick = e => {
   const id = e.target.closest("[data-run]")?.dataset.run;
   if (id) action(() => select(id));

@@ -17,7 +17,7 @@ from PIL import Image, ImageOps
 from collect import TABS, collect, fetch
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_path
 from reviews import apply_review, review_changes
-from snapshots import public, seed_snapshot
+from snapshots import local_weekly, public, seed_snapshot
 from vision import Vision
 
 ROOT = Path(__file__).resolve().parent
@@ -170,6 +170,14 @@ def results(run_id):
     if not run:
         return jsonify(error="수집 기록이 없습니다."), 404
     return jsonify(**public(run), products=run["products"])
+
+
+@app.get("/api/runs/<run_id>/weekly")
+def weekly(run_id):
+    runs = [load(path) for path in files()]
+    if not any(run["id"] == run_id for run in runs):
+        return jsonify(error="수집 기록이 없습니다."), 404
+    return jsonify(local_weekly(run_id, runs))
 
 
 @app.post("/api/collect")
