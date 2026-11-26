@@ -4,7 +4,10 @@ const esc = value => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<"
 const number = value => value.toLocaleString("ko-KR");
 const pct = (n, d) => d ? (100 * n / d).toFixed(1) + "%" : "—";
 const brands = {SPAO: "스파오", WHO: "후아유"};
-const kinds = {model: "모델 착장컷", product_only: "상품 단독컷", unknown: "미분류"};
+const kinds = {
+  model: "모델 착장컷", similar: "기준 얼굴 유사", unclear: "유사도 검토 필요",
+  product_only: "상품 단독컷", unknown: "미분류"
+};
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
 let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
@@ -87,6 +90,12 @@ function imageUrl(row) {
   }
   return row.image_file ? `/images/${encodeURIComponent(current.id)}/${encodeURIComponent(row.image_file)}` : row.thumbnail_url;
 }
+function classification(row) {
+  if (row.thumbnail_type === "model" && ["similar", "unclear"].includes(row.similarity)) {
+    return row.similarity;
+  }
+  return row.thumbnail_type;
+}
 function gallery() {
   if (!current || $("products").hidden) return;
   const term = $("search").value.trim().toLowerCase();
@@ -96,13 +105,12 @@ function gallery() {
     (!brand || brand === r.brand) && (!tab || r.tabs.includes(tab)) &&
     (!term || [r.name, r.product_id, r.code].some(v => String(v).toLowerCase().includes(term))) &&
     (!kind || (kind === "missing" ? !r.code :
-      (kind === "similar" || kind === "unclear") ? r.similarity === kind && r.thumbnail_type === "model" :
-      r.thumbnail_type === kind)));
+      kind === "all_models" ? r.thumbnail_type === "model" : classification(r) === kind)));
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   page = Math.min(page, pages - 1);
   $("filtered").textContent = `${number(filtered.length)}개 상품`;
   $("gallery").innerHTML = filtered.slice(page * pageSize, (page + 1) * pageSize).map(r => {
-    const label = r.similarity === "similar" && r.thumbnail_type === "model" ? "기준 얼굴 유사" : kinds[r.thumbnail_type];
+    const label = kinds[classification(r)];
     return `<button class="card" data-product="${esc(r.brand + ":" + r.product_id)}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "품번 미확인")} · ${esc(r.product_id)}</small></button>`;
   }).join("") || "<p>조건에 맞는 상품이 없습니다.</p>";
   $("pagination").innerHTML = `<button id="prev" ${page ? "" : "disabled"}>이전</button><span>${page + 1} / ${pages}</span><button id="next" ${page + 1 < pages ? "" : "disabled"}>다음</button>`;
@@ -114,10 +122,10 @@ function edit(row) {
   $("detail").href = row.detail_url || row.list_url;
   $("item-error").textContent = row.error || (row.price ? number(row.price) + "원" : "");
   $("edit-code").value = row.code;
-  $("edit-type").value = row.thumbnail_type;
-  $("edit-sim").value = row.similarity;
-  $("edit-sim").disabled = row.thumbnail_type !== "model";
-  $("review").querySelector('button[type="submit"], button.primary').disabled = Boolean(demo) || state.operator === false;
+  const kind = classification(row);
+  $("edit-type").value = kind === "model" && row.similarity !== "other" ? "unscanned" : kind;
+  $("review-error").textContent = "";
+  $("save-review").disabled = Boolean(demo) || state.operator === false;
   $("edit").showModal();
 }
 function renderReferences() {
@@ -294,20 +302,35 @@ $("reference").onsubmit = async e => {
     rejected.length ? `등록 실패 ${rejected.length}장 · ${rejected.join(", ")}` : ""].filter(Boolean).join(" · ");
   await action(sync);
 };
-$("edit-type").onchange = () => {
-  $("edit-sim").disabled = $("edit-type").value !== "model";
-  if (!$("edit-sim").disabled && $("edit-sim").value === "not_applicable") $("edit-sim").value = "unscanned";
-};
 $("close").onclick = () => $("edit").close();
-$("review").onsubmit = e => {
+$("review").onsubmit = async e => {
   e.preventDefault();
-  action(async () => {
-    await send(`/api/runs/${editing.run_id}/product`, {
-      brand: editing.brand, product_id: editing.product_id, code: $("edit-code").value,
-      thumbnail_type: $("edit-type").value, similarity: $("edit-sim").value
+  const save = $("save-review");
+  if (save.disabled) return;
+  const item = editing;
+  const {run_id, brand, product_id} = item;
+  const kind = $("edit-type").value;
+  const thumbnailType = ["product_only", "unknown"].includes(kind) ? kind : "model";
+  const similarity = thumbnailType !== "model" ? "not_applicable" : kind === "model" ? "other" : kind;
+  save.disabled = true;
+  $("review-error").textContent = "";
+  try {
+    await send(`/api/runs/${run_id}/product`, {
+      brand, product_id, code: $("edit-code").value,
+      thumbnail_type: thumbnailType, similarity
     }, "PATCH");
-    $("edit").close();
-    await select(editing.run_id);
+  } catch (error) {
+    if (editing === item && $("edit").open) {
+      $("review-error").textContent = error.message;
+      save.disabled = false;
+    } else {
+      notice(error.message, true);
+    }
+    return;
+  }
+  if (editing === item) $("edit").close();
+  await action(async () => {
+    if (current.id === run_id) await select(run_id);
     notice("상품 분류를 저장했습니다.");
   });
 };
