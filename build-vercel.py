@@ -15,7 +15,7 @@ run = seed_snapshot()
 summary = public(run)
 demo = {"state": {"runs": [summary], "job": {"state": "idle"},
                   "schedule": {"enabled": False, "time": "09:00"},
-                  "reference": False, "vision": False},
+                  "references": {}, "vision": False},
         "run": dict(summary, products=run["products"])}
 (output / "demo.json").write_text(json.dumps(demo, ensure_ascii=False), encoding="utf-8")
 with (output / "demo.csv").open("w", encoding="utf-8-sig", newline="") as file:

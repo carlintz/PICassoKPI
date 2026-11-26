@@ -276,14 +276,16 @@ def process_product(row, classifier, old, directory, ocr_budget=0):
         filename = f"{row['brand']}-{int(row['product_id'])}.jpg"
         picture.save(directory / filename, quality=90)
         row["image_file"] = filename
-        row.update(classifier.classify(picture, "WOMEN" in row["tabs"]))
+        row.update(classifier.classify(picture, row["brand"]))
         if old.get("thumbnail_url") == row["thumbnail_url"] and old.get("reviewed"):
             row["thumbnail_type"] = old["thumbnail_type"]
             row["reviewed"] = True
-            if not classifier.reference_changed:
+            if row["brand"] not in classifier.changed_brands and old["similarity"] != "not_applicable":
                 row["similarity"] = old["similarity"]
             if row["thumbnail_type"] != "model":
                 row.update(similarity="not_applicable", score=None)
+            elif row["similarity"] == "not_applicable":
+                row["similarity"] = "unscanned"
     except Exception as error:
         messages.append(f"썸네일: {error}")
     if row["brand"] == "WHO" and not row["code"]:

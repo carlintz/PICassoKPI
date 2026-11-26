@@ -30,14 +30,14 @@ def seed_snapshot():
 
 def summarize(products):
     total = len(products)
-    model = sum(r["thumbnail_type"] == "model" for r in products)
+    similarities = [r["similarity"] for r in products if r["thumbnail_type"] == "model"]
+    model = len(similarities)
     product = sum(r["thumbnail_type"] == "product_only" for r in products)
-    match = sum(r["thumbnail_type"] == "model" and r["similarity"] == "similar" for r in products)
-    return {"total": total, "model": model, "product": product, "match": match,
+    return {"total": total, "model": model, "product": product, "match": similarities.count("similar"),
             "unknown": total - model - product,
-            "unclear": sum(r["similarity"] == "unclear" for r in products),
+            "unclear": similarities.count("unclear"),
             "code": sum(bool(r["code"]) for r in products),
-            "compared": sum(r["similarity"] in ("similar", "other", "unclear") for r in products),
+            "compared": sum(value in ("similar", "other", "unclear") for value in similarities),
             "errors": sum(bool(r["error"]) for r in products)}
 
 

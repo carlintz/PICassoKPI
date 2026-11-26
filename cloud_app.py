@@ -16,10 +16,10 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from flask import Flask, Response, jsonify, request, session
-from PIL import Image, ImageOps
 
 import cloud_store as db
 from collect import list_products, process_product
+from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
 from snapshots import public, seed_snapshot
 from vision import Vision
 
@@ -57,6 +57,11 @@ def authorize():
 def storage_error(error):
     app.logger.warning("Supabase status %s", error.status)
     return jsonify(error="Supabase 요청을 처리하지 못했습니다."), 502
+
+
+@app.errorhandler(413)
+def too_large(error):
+    return jsonify(error="기준 이미지는 한 장당 4MB 미만으로 올려 주세요."), 413
 
 
 @app.get("/")
@@ -105,8 +110,12 @@ def state():
             job["done"] = db.rest("rpc/picasso_progress", method="POST", body={"target_run": status["id"]})
     summaries = [run["summary"] or (dict(BASELINE, source="검증 샘플 · Supabase")
                  if run["id"] == db.BASELINE_ID else public(snapshot(run, []))) for run in runs]
-    return jsonify(runs=summaries, job=job, reference=bool(db.setting("reference")),
-                   vision=(MODELS / "face_detection_yunet_2023mar.onnx").is_file(),
+    references = db.reference_rows()
+    legacy = db.setting("reference")
+    if legacy:
+        references.append(legacy_entry(legacy))
+    return jsonify(runs=summaries, job=job, references=reference_counts(references),
+                   vision=Vision(MODELS).can_compare,
                    schedule={"enabled": False, "time": db.setting("schedule", "09:00")},
                    operator=bool(session.get("operator")), scheduling_paused=True)
 
@@ -156,21 +165,18 @@ def reference():
     if active_run():
         return jsonify(error="수집이 끝난 뒤 기준 이미지를 변경하세요."), 409
     try:
-        with Image.open(request.files["image"].stream) as upload:
-            picture = ImageOps.exif_transpose(upload).convert("RGB")
-        picture.thumbnail((1200, 1200))
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "reference.jpg"
-            picture.save(path, quality=94)
-            if Vision(MODELS, path).vector is None:
-                return jsonify(error="얼굴 한 개가 선명하게 보이는 이미지를 선택하세요."), 400
-            content = path.read_bytes()
-    except (KeyError, OSError, ValueError):
+        entry, content = prepare_reference(request.form, request.files, MODELS)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    except OSError:
         return jsonify(error="사용할 수 없는 이미지입니다."), 400
-    key = f"reference/{hashlib.sha256(content).hexdigest()}.jpg"
-    db.put_image(key, content)
-    db.save_setting("reference", key)
-    return jsonify(ok=True)
+    if (entry["brand"] == "WHO" and entry["reference_group"] == "women"
+            and entry["storage_path"] == db.setting("reference")):
+        return jsonify(ok=True, added=False)
+    db.put_image(entry["storage_path"], content)
+    inserted = db.rest("picasso_references", method="POST", body=entry,
+                       headers={"Prefer": "resolution=ignore-duplicates,return=representation"})
+    return jsonify(ok=True, added=bool(inserted))
 
 
 @app.patch("/api/runs/<run_id>/product")
@@ -193,8 +199,9 @@ def review(run_id):
     row = selected["result"]
     code = str(data.get("code", ""))[:40].strip()
     row.update(thumbnail_type=kind, code=code, code_status="found" if code else "missing", reviewed=True,
-               similarity=similarity if kind == "model" and row["brand"] == "WHO" and "WOMEN" in row["tabs"]
-               else "not_applicable")
+               similarity=similarity if kind == "model" else "not_applicable")
+    if kind != "model":
+        row["score"] = None
     db.rest("picasso_products", method="PATCH", query=filters, body={"result": row})
     summary = public(snapshot(run, [p["result"] for p in db.product_rows(ident)]))
     db.rest("picasso_runs", method="PATCH", query={"id": f"eq.{ident}"}, body={"summary": summary})
@@ -220,9 +227,13 @@ def start():
     if not session.get("operator"):
         return jsonify(error="운영자 로그인이 필요합니다."), 401
     prior = db.first("picasso_runs", status="eq.complete", select="id", order="created_at.desc")
+    references = db.reference_rows(embeddings=True)
+    legacy = db.setting("reference")
+    if legacy and not any(row["brand"] == "WHO" and row["storage_path"] == legacy for row in references):
+        references.append(legacy_embedding(legacy_entry(legacy), db.get_image(legacy), MODELS))
     try:
         active = db.rest("picasso_runs", method="POST",
-                         body={"reference_path": db.setting("reference"),
+                         body={"reference_sets": references,
                                "prior_run": prior["id"] if prior else None},
                          headers={"Prefer": "return=representation"})[0]
     except db.StoreError as error:
@@ -267,18 +278,19 @@ def batch(run_id, index):
         return jsonify(ok=True)
     keys = {(r["brand"], r["product_id"]) for r in items}
     existing = {(r["brand"], r["product_id"]) for r in db.product_rows(ident, keys, "brand,product_id")}
-    prior = db.first("picasso_runs", id=f"eq.{run['prior_run']}", select="reference_path") if run["prior_run"] else None
+    prior = db.first("picasso_runs", id=f"eq.{run['prior_run']}", select="reference_sets") if run["prior_run"] else None
     previous = {(p["result"]["brand"], p["result"]["product_id"]): p["result"]
                 for p in db.product_rows(run["prior_run"], keys)} if prior is not None else {}
     missing = [row for row in items if (row["brand"], row["product_id"]) not in existing]
     if missing:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
-            reference_file = path / "reference.jpg"
-            if run["reference_path"]:
-                reference_file.write_bytes(db.get_image(run["reference_path"]))
-            ref_changed = not prior or run["reference_path"] != prior["reference_path"] or run["prior_run"] == db.BASELINE_ID
-            classifier = Vision(MODELS, reference_file, ref_changed)
+            references = run["reference_sets"]
+            if references is None:
+                legacy = run["reference_path"]
+                references = [legacy_embedding(legacy_entry(legacy), db.get_image(legacy), MODELS)] if legacy else []
+            previous_references = prior["reference_sets"] if prior else None
+            classifier = Vision(MODELS, references, changed_brands(references, previous_references))
 
             def collect_one(row):
                 if not approved(row["thumbnail_url"], IMAGE_HOSTS):

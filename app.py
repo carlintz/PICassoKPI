@@ -1,5 +1,4 @@
 import csv
-import hashlib
 import hmac
 import io
 import json
@@ -15,14 +14,16 @@ from zoneinfo import ZoneInfo
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from PIL import Image, ImageOps
 
-from collect import SPAO, WHO, TABS, collect, fetch
-from vision import Vision
+from collect import TABS, collect, fetch
+from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_path
 from snapshots import public, seed_snapshot
+from vision import Vision
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("PICASSO_DATA", ROOT / ".local")).resolve()
 DATA.mkdir(parents=True, exist_ok=True)
 REFERENCE = DATA / "reference.jpg"
+REFERENCES = DATA / "references.json"
 MODELS = Path(os.environ.get("PICASSO_MODELS", DATA / "models")).resolve()
 WEB_USER = os.environ.get("PICASSO_WEB_USER", "")
 WEB_PASSWORD = os.environ.get("PICASSO_WEB_PASSWORD", "")
@@ -100,6 +101,17 @@ def progress(done, total):
     job.update(done=done, total=total)
 
 
+def reference_library(embeddings=False):
+    entries = load(REFERENCES, [])
+    if REFERENCE.exists():
+        content = REFERENCE.read_bytes()
+        entry = legacy_entry(reference_path(content))
+        if embeddings:
+            entry = legacy_embedding(entry, content, MODELS)
+        entries.append(entry)
+    return entries
+
+
 def work():
     run_id = now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
     image_dir = DATA / "images" / run_id
@@ -107,11 +119,13 @@ def work():
     try:
         prior = snapshot()
         previous = {(r["brand"], r["product_id"]): r for r in prior["products"]} if prior else {}
-        digest = hashlib.sha256(REFERENCE.read_bytes()).hexdigest() if REFERENCE.exists() else ""
-        classifier = Vision(MODELS, REFERENCE, not prior or digest != prior["reference_hash"])
+        references = reference_library(embeddings=True)
+        previous_references = prior.get("reference_sets") if prior else None
+        classifier = Vision(MODELS, references, changed_brands(references, previous_references))
         rows = collect(classifier, previous, image_dir, progress)
+        reference_sets = [{k: v for k, v in entry.items() if k != "embedding"} for entry in references]
         save(DATA / f"run-{run_id}.json", {"id": run_id, "at": now().isoformat(),
-             "source": "공식몰 수집", "reference_hash": digest, "products": rows})
+             "source": "공식몰 수집", "reference_sets": reference_sets, "products": rows})
         job.update(state="complete", message="수집 완료", id=run_id)
     except Exception as error:
         job.update(state="failed", message=str(error))
@@ -145,8 +159,8 @@ def home():
 @app.get("/api/state")
 def state():
     runs = [public(load(path)) for path in files()]
-    return jsonify(runs=runs, job=dict(job), schedule=options(), reference=REFERENCE.exists(),
-                   vision=(MODELS / "face_detection_yunet_2023mar.onnx").exists())
+    return jsonify(runs=runs, job=dict(job), schedule=options(),
+                   references=reference_counts(reference_library()), vision=Vision(MODELS).can_compare)
 
 
 @app.get("/api/runs/<run_id>")
@@ -182,19 +196,20 @@ def reference():
     with lock:
         if job["state"] == "running":
             return jsonify(error="수집이 끝난 뒤 기준 이미지를 변경하세요."), 409
-        temp = DATA / ".reference-upload.jpg"
         try:
-            with Image.open(request.files["image"].stream) as uploaded:
-                picture = ImageOps.exif_transpose(uploaded).convert("RGB")
-            picture.thumbnail((1200, 1200))
-            picture.save(temp, quality=94)
-            if Vision(MODELS, temp).vector is None:
-                raise ValueError("얼굴 하나가 선명한 이미지와 설치된 분석 모델이 필요합니다.")
-            temp.replace(REFERENCE)
-        except (OSError, KeyError, ValueError) as error:
-            temp.unlink(missing_ok=True)
+            entry, content = prepare_reference(request.form, request.files, MODELS)
+        except ValueError as error:
             return jsonify(error=str(error)), 400
-    return jsonify(ok=True)
+        except OSError:
+            return jsonify(error="사용할 수 없는 이미지입니다."), 400
+        if any(all(existing[k] == entry[k] for k in ("brand", "reference_group", "storage_path"))
+               for existing in reference_library()):
+            return jsonify(ok=True, added=False)
+        destination = DATA / entry["storage_path"]
+        destination.parent.mkdir(exist_ok=True)
+        destination.write_bytes(content)
+        save(REFERENCES, [*load(REFERENCES, []), entry])
+    return jsonify(ok=True, added=True)
 
 
 @app.patch("/api/runs/<run_id>/product")
@@ -213,9 +228,10 @@ def review(run_id):
                      and r["product_id"] == data.get("product_id")), None)
         if item is None:
             return jsonify(error="상품이 없습니다."), 404
-        item.update(thumbnail_type=kind, similarity=similar if kind == "model" and item["brand"] == "WHO"
-                    and "WOMEN" in item["tabs"] else "not_applicable",
+        item.update(thumbnail_type=kind, similarity=similar if kind == "model" else "not_applicable",
                     code=str(data.get("code", ""))[:40].strip(), reviewed=True)
+        if kind != "model":
+            item["score"] = None
         item["code_status"] = "found" if item["code"] else "missing"
         save(DATA / f"run-{run_id}.json", run)
     return jsonify(ok=True)

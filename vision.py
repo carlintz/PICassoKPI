@@ -5,18 +5,27 @@ import numpy as np
 
 
 class Vision:
-    def __init__(self, models, reference, reference_changed=False):
-        self.models = models
+    def __init__(self, models, references=(), changed_brands=()):
         self.detector = models / "face_detection_yunet_2023mar.onnx"
         self.recognizer = models / "face_recognition_sface_2021dec.onnx"
         self.local = local()
-        self.reference_changed = reference_changed
-        self.vector = None
-        if reference.exists() and self.detector.exists() and self.recognizer.exists():
-            image = cv2.imread(str(reference))
-            faces = self.detect(image)
-            if len(faces) == 1:
-                self.vector = self.feature(image, faces[0])
+        self.changed_brands = changed_brands
+        grouped = {}
+        for reference in references:
+            grouped.setdefault(reference["brand"], []).append(reference["embedding"])
+        self.references = {brand: np.asarray(vectors, dtype=np.float32)
+                           for brand, vectors in grouped.items()}
+
+    @property
+    def can_compare(self):
+        return self.detector.is_file() and self.recognizer.is_file()
+
+    def reference_embedding(self, picture):
+        image = cv2.cvtColor(np.asarray(picture), cv2.COLOR_RGB2BGR)
+        faces = self.detect(image)
+        if len(faces) != 1:
+            raise ValueError("얼굴 한 개가 선명하게 보이는 이미지를 선택하세요.")
+        return self.feature(image, faces[0]).tolist()
 
     def detect(self, image):
         if image is None:
@@ -33,9 +42,12 @@ class Vision:
             self.local.recognizer = cv2.FaceRecognizerSF.create(str(self.recognizer), "")
         recognizer = self.local.recognizer
         vector = recognizer.feature(recognizer.alignCrop(image, face)).ravel()
-        return vector / np.linalg.norm(vector)
+        norm = np.linalg.norm(vector)
+        if not np.isfinite(norm) or norm == 0:
+            raise ValueError("얼굴 특징을 추출할 수 없습니다.")
+        return vector / norm
 
-    def classify(self, picture, compare):
+    def classify(self, picture, brand):
         if not self.detector.exists():
             return {}
         image = cv2.cvtColor(np.asarray(picture), cv2.COLOR_RGB2BGR)
@@ -43,8 +55,10 @@ class Vision:
         if not len(faces):
             return {"thumbnail_type": "product_only", "similarity": "not_applicable"}
         result = {"thumbnail_type": "model"}
-        if compare and self.vector is not None:
-            score = max(float(self.feature(image, face) @ self.vector) for face in faces)
+        references = self.references.get(brand)
+        if references is not None:
+            faces = np.stack([self.feature(image, face) for face in faces])
+            score = float(np.clip((faces @ references.T).max(), -1, 1))
             result.update(score=round(score, 3),
                           similarity="similar" if score >= .45 else "unclear" if score >= .32 else "other")
         return result

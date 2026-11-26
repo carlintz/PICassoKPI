@@ -23,10 +23,14 @@
     <div class="scope"><label>집계 기록 <select id="runs" aria-label="집계 기록"></select></label><p id="source"></p></div>
     <div id="metrics" class="metrics"></div>
     <article class="panel"><div class="panel-title"><div><h2>브랜드별 썸네일 구성</h2><p>얼굴이 보이는 썸네일을 모델 착장컷으로 집계합니다.</p></div><div class="legend"><span><i></i>상품 단독컷</span><span><i></i>모델 착장컷</span><span><i></i>미분류</span></div></div><div id="bars"></div></article>
-    <div class="split">
-      <article class="panel"><div class="panel-title"><div><h2>후아유 WOMEN · 기준 얼굴</h2><p>시각적 유사도 집계</p></div><a href="#products" id="similar-link">상품 보기 →</a></div><div class="comparison" id="comparison"></div></article>
-      <article class="panel"><div class="panel-title"><div><h2>최근 집계</h2><p>수집 시점별 상품 수와 착장컷 비중</p></div></div><div id="history"></div></article>
-    </div>
+    <article class="panel">
+      <div class="panel-title"><div><h2>기준 얼굴 유사도</h2><p>같은 브랜드의 남성·여성 기준 이미지와 모두 비교합니다.</p></div><a href="#products" id="similar-link">유사 상품 보기 →</a></div>
+      <div class="table-scroll"><table aria-label="카테고리별 기준 얼굴 유사도">
+        <thead><tr><th scope="col">카테고리</th><th scope="col">전체 상품</th><th scope="col">착장컷</th><th scope="col">비교 완료</th><th scope="col">유사 상품</th><th scope="col">전체 상품 대비</th><th scope="col">착장컷 대비</th></tr></thead>
+        <tbody id="comparison"></tbody>
+      </table></div>
+    </article>
+    <article class="panel"><div class="panel-title"><div><h2>최근 집계</h2><p>수집 시점별 상품 수와 착장컷 비중</p></div></div><div id="history"></div></article>
   </section>
   <section id="products" hidden>
     <div class="filters panel">
@@ -41,8 +45,26 @@
     <article class="panel"><div class="panel-title"><div><h2>자동 수집</h2><p id="schedule-note">매일 지정한 시각에 수집합니다.</p></div></div>
       <form id="schedule"><label class="field"><span>매일 자동 수집</span><input id="enabled" type="checkbox"></label><label class="field"><span>수집 시각 · 한국 시간</span><input id="time" type="time" required></label><button class="primary">저장</button></form>
     </article>
-    <article class="panel"><div class="panel-title"><div><h2>기준 얼굴 이미지</h2><p>후아유 WOMEN의 새 수집 결과에 적용됩니다.</p></div></div>
-      <form id="reference"><p id="reference-status"></p><input type="file" name="image" accept="image/*" required><button class="primary">기준 이미지 저장</button></form>
+    <article class="panel"><div class="panel-title"><div><h2>기준 얼굴 이미지</h2><p>브랜드별로 남성과 여성 기준 이미지를 등록합니다. 다음 수집부터 해당 브랜드의 두 탭 모두에 적용됩니다.</p></div></div>
+      <table aria-label="등록된 기준 이미지 수">
+        <thead><tr><th scope="col">브랜드</th><th scope="col">남성</th><th scope="col">여성</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">스파오</th><td data-reference-count="SPAO:men">—</td><td data-reference-count="SPAO:women">—</td></tr>
+          <tr><th scope="row">후아유</th><td data-reference-count="WHO:men">—</td><td data-reference-count="WHO:women">—</td></tr>
+        </tbody>
+      </table>
+      <form id="reference">
+        <fieldset disabled>
+          <label class="field">브랜드 <select name="brand"><option value="SPAO">스파오</option><option value="WHO">후아유</option></select></label>
+          <label class="field">기준 얼굴 그룹 <select name="group"><option value="men">남성</option><option value="women">여성</option></select></label>
+          <label for="reference-files">기준 이미지 선택</label>
+          <input id="reference-files" type="file" name="image" accept="image/*" multiple required aria-describedby="reference-help">
+          <p id="reference-help">얼굴이 한 개씩 보이는 이미지를 여러 장 선택할 수 있습니다. 한 장당 4MB 미만입니다.</p>
+          <button class="primary">기준 이미지 추가</button>
+        </fieldset>
+        <p id="reference-status"></p>
+        <p id="reference-upload-status" role="status"></p>
+      </form>
     </article>
   </section>
 </main>

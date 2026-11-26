@@ -61,9 +61,19 @@ def product_rows(run_id, keys=None, select="result"):
     filters = {"run_id": f"eq.{run_id}", "select": select, "order": "brand,product_id"}
     if keys:
         filters["product_id"] = "in.(" + ",".join(sorted({str(int(pid)) for _, pid in keys})) + ")"
+    return all_rows("picasso_products", filters)
+
+
+def reference_rows(embeddings=False):
+    columns = "brand,reference_group,storage_path"
+    return all_rows("picasso_references", {"select": columns + (",embedding" if embeddings else ""),
+                                         "order": columns})
+
+
+def all_rows(table, filters):
     rows = []
     while True:
-        batch = rest("picasso_products", query={**filters, "limit": 500, "offset": len(rows)})
+        batch = rest(table, query={**filters, "limit": 500, "offset": len(rows)})
         rows.extend(batch)
         if len(batch) < 500:
             return rows

@@ -7,7 +7,7 @@ const brands = {SPAO: "스파오", WHO: "후아유"};
 const kinds = {model: "모델 착장컷", product_only: "상품 단독컷", unknown: "미분류"};
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
-let demo, state, current, editing, page = 0, lastJob, syncing = false, collectAfterLogin = false;
+let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -56,13 +56,12 @@ async function select(id) {
 function render() {
   if (!current) return;
   const s = current.summary;
-  const who = current.groups.find(g => g.brand === "WHO" && g.tab === "WOMEN");
   $("source").textContent = `${current.source} · ${s.unknown}개 미분류 · ${s.code}/${s.total}개 품번 확인`;
   const metrics = [
     ["전체 상품", s.total, "브랜드별 중복 제외"],
     ["상품 단독컷", s.product, pct(s.product, s.total) + " · 전체 대비"],
     ["모델 착장컷", s.model, pct(s.model, s.total) + " · 전체 대비"],
-    ["기준 얼굴 유사", s.match, pct(s.match, who.model) + " · 후아유 WOMEN 착장컷 대비"]
+    ["기준 얼굴 유사", s.match, pct(s.match, s.model) + " · 착장컷 대비"]
   ];
   $("metrics").innerHTML = metrics.map(([title, count, label]) =>
     `<div class="metric"><span>${title}</span><strong>${number(count)}</strong><small>${label}</small></div>`).join("");
@@ -72,8 +71,11 @@ function render() {
     const parts = [g.product, g.model, g.unknown].map(n => `<i style="width:${g.total ? 100 * n / g.total : 0}%"></i>`).join("");
     return `<div class="bar-row ${g.tab ? "sub" : ""}"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(detail)}" title="${esc(detail)}">${parts}</div><strong>${pct(g.model, g.total)}</strong></div>`;
   }).join("");
-  $("comparison").innerHTML = [[who.match, "유사"], [who.unclear, "검토 필요"], [who.model - who.compared, "미비교"]]
-    .map(([v, label]) => `<div><strong>${v}</strong><span>${label}</span></div>`).join("");
+  $("comparison").innerHTML = current.groups.filter(g => g.tab).map(g =>
+    `<tr><th scope="row">${esc(brands[g.brand])} ${esc(g.tab)}</th><td>${number(g.total)}</td>
+      <td>${number(g.model)}</td><td>${number(g.compared)}</td>
+      <td><a href="#products" data-similar-tab="${esc(g.brand + ":" + g.tab)}" aria-label="${esc(brands[g.brand] + " " + g.tab + " 유사 상품 보기")}">${number(g.match)}</a></td>
+      <td>${pct(g.match, g.total)}</td><td>${pct(g.match, g.model)}</td></tr>`).join("");
   $("history").innerHTML = state.runs.slice(0, 6).map(r =>
     `<button class="history-row" data-run="${esc(r.id)}" type="button"><span>${esc(date(r.at))} · ${esc(r.source)}</span><b>${number(r.summary.total)}개 · ${pct(r.summary.model, r.summary.total)}</b></button>`).join("");
   gallery();
@@ -114,9 +116,21 @@ function edit(row) {
   $("edit-code").value = row.code;
   $("edit-type").value = row.thumbnail_type;
   $("edit-sim").value = row.similarity;
-  $("edit-sim").disabled = row.brand !== "WHO" || !row.tabs.includes("WOMEN");
+  $("edit-sim").disabled = row.thumbnail_type !== "model";
   $("review").querySelector('button[type="submit"], button.primary').disabled = Boolean(demo) || state.operator === false;
   $("edit").showModal();
+}
+function renderReferences() {
+  for (const cell of document.querySelectorAll("[data-reference-count]")) {
+    const [brand, group] = cell.dataset.referenceCount.split(":");
+    cell.textContent = number(state.references?.[brand]?.[group] ?? 0) + "장";
+  }
+  const message = demo ? "수집 서버 연결 후 기준 이미지를 등록할 수 있습니다."
+    : state.operator === false ? "운영자 로그인 후 기준 이미지를 등록할 수 있습니다."
+    : !state.vision ? "얼굴 분석 모델을 사용할 수 없습니다."
+    : state.job.state === "running" ? "수집 완료 후 기준 이미지를 등록할 수 있습니다." : "";
+  $("reference").querySelector("fieldset").disabled = Boolean(message) || uploading;
+  $("reference-status").textContent = message;
 }
 async function sync(initial = false) {
   if (syncing) return;
@@ -145,9 +159,7 @@ async function sync(initial = false) {
     }
     if (demo) {
       state = demo.state;
-      for (const id of ["schedule", "reference"]) {
-        $(id).querySelectorAll("input, button").forEach(input => { input.disabled = true; });
-      }
+      $("schedule").querySelectorAll("input, button").forEach(input => { input.disabled = true; });
     }
     const {job, runs, schedule} = state;
     const selected = current?.id;
@@ -157,7 +169,6 @@ async function sync(initial = false) {
     $("operator-login").hidden = state.operator !== false;
     if (!demo) {
       $("schedule").querySelector("button").disabled = state.operator === false;
-      $("reference").querySelector("button").disabled = state.operator === false;
       $("enabled").disabled = Boolean(state.scheduling_paused);
       if (state.scheduling_paused) {
         $("schedule-note").textContent = "자동 실행 보류 중 · 한국 시간 기준 시각을 저장할 수 있습니다.";
@@ -177,7 +188,7 @@ async function sync(initial = false) {
       $("time").value = schedule.time;
       await select($("runs").value);
     } else if (current) renderHistory();
-    $("reference-status").textContent = state.reference ? "기준 이미지 등록됨" : state.vision ? "등록된 기준 이미지 없음" : "분석 모델 설치 필요";
+    renderReferences();
   } finally { syncing = false; }
 }
 function renderHistory() {
@@ -221,7 +232,18 @@ $("login-form").onsubmit = async e => {
   }
 };
 $("collect").onclick = () => state?.operator === false ? openLogin(true) : action(collectNow);
-$("similar-link").onclick = () => { $("tab-filter").value = "WHO:WOMEN"; $("kind-filter").value = "similar"; $("search").value = ""; page = 0; gallery(); };
+function showSimilar(tab = "") {
+  $("tab-filter").value = tab;
+  $("kind-filter").value = "similar";
+  $("search").value = "";
+  page = 0;
+  gallery();
+}
+$("similar-link").onclick = () => showSimilar();
+$("comparison").onclick = e => {
+  const link = e.target.closest("[data-similar-tab]");
+  if (link) showSimilar(link.dataset.similarTab);
+};
 for (const id of ["search", "tab-filter", "kind-filter"]) $(id).oninput = () => { page = 0; gallery(); };
 $("gallery").onclick = e => {
   const key = e.target.closest("[data-product]")?.dataset.product;
@@ -240,14 +262,41 @@ $("schedule").onsubmit = e => {
     notice("자동 수집 설정을 저장했습니다.");
   });
 };
-$("reference").onsubmit = e => {
+$("reference").onsubmit = async e => {
   e.preventDefault();
-  action(async () => {
-    await api("/api/reference", {method: "POST", body: new FormData(e.target)});
-    e.target.reset();
-    await sync();
-    notice("기준 이미지를 저장했습니다.");
-  });
+  const form = e.currentTarget;
+  const {brand, group, image} = form.elements;
+  const selection = [...image.files];
+  const status = $("reference-upload-status");
+  let added = 0, duplicate = 0;
+  const rejected = [];
+  uploading = true;
+  renderReferences();
+  for (const [index, file] of selection.entries()) {
+    status.textContent = `기준 이미지 등록 중 ${index + 1} / ${selection.length}장`;
+    try {
+      if (file.size >= 4_000_000) throw new Error("한 장당 4MB 미만이어야 합니다.");
+      const body = new FormData();
+      body.set("brand", brand.value);
+      body.set("group", group.value);
+      body.set("image", file);
+      const result = await api("/api/reference", {method: "POST", body});
+      if (result.added) added++;
+      else duplicate++;
+    } catch (error) {
+      rejected.push(`${file.name} (${error.message})`);
+    }
+  }
+  image.value = "";
+  uploading = false;
+  renderReferences();
+  status.textContent = [`${added}장 등록`, duplicate ? `이미 등록 ${duplicate}장` : "",
+    rejected.length ? `등록 실패 ${rejected.length}장 · ${rejected.join(", ")}` : ""].filter(Boolean).join(" · ");
+  await action(sync);
+};
+$("edit-type").onchange = () => {
+  $("edit-sim").disabled = $("edit-type").value !== "model";
+  if (!$("edit-sim").disabled && $("edit-sim").value === "not_applicable") $("edit-sim").value = "unscanned";
 };
 $("close").onclick = () => $("edit").close();
 $("review").onsubmit = e => {
