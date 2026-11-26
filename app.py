@@ -224,7 +224,7 @@ def review(run_id, bulk=False):
         run = snapshot(run_id)
         if not run:
             return jsonify(error="수집 기록이 없습니다."), 404
-        if not apply_review(run["products"], keys, changes):
+        if apply_review(run["products"], keys, changes) is None:
             return jsonify(error="이 수집 기록에 없는 상품이 선택되었습니다."), 404
         save(DATA / f"run-{run_id}.json", run)
     return jsonify(ok=True, updated=len(keys))

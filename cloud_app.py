@@ -191,18 +191,18 @@ def review(run_id, bulk=False):
     except ValueError as error:
         return jsonify(error=str(error)), 400
 
-    products = [{"brand": brand, "product_id": pid} for brand, pid in sorted(keys)]
     for _ in range(3):
         run = db.first("picasso_runs", id=f"eq.{ident}", status="eq.complete", select="id,created_at,review_version")
         if not run:
             return jsonify(error="수집 기록이 없습니다."), 404
         rows = [p["result"] for p in db.product_rows(ident)]
-        if not apply_review(rows, keys, changes):
+        products = apply_review(rows, keys, changes)
+        if products is None:
             return jsonify(error="이 수집 기록에 없는 상품이 선택되었습니다."), 404
         report = public(snapshot(run, rows))
         saved = db.rest("rpc/picasso_review_products", method="POST",
                         body={"target_run": ident, "expected_version": run["review_version"],
-                              "products": products, "changes": changes, "report": report})
+                              "products": products, "changes": {}, "report": report})
         if saved:
             return jsonify(ok=True, updated=len(keys))
     return jsonify(error="수집 기록에 다른 변경이 저장되었습니다. 다시 시도하세요."), 409

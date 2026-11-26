@@ -22,11 +22,11 @@
   <section id="overview">
     <div class="scope"><label>집계 기록 <select id="runs" aria-label="집계 기록"></select></label><p id="source"></p></div>
     <div id="metrics" class="metrics"></div>
-    <article class="panel"><div class="panel-title"><div><h2>브랜드별 썸네일 구성</h2><p>얼굴이 보이는 썸네일을 모델 착장컷으로 집계합니다.</p></div><div class="legend"><span><i></i>상품 단독컷</span><span><i></i>모델 착장컷</span><span><i></i>미분류</span></div></div><div id="bars"></div></article>
+    <article class="panel"><div class="panel-title"><div><h2>브랜드별 썸네일 구성</h2><p>오른쪽 비율은 전체 상품 중 전체 모델 착장컷의 비중입니다.</p></div><div class="legend"><span><i></i>상품 단독컷</span><span><i></i>일반 모델 착장컷</span><span><i></i>AI 모델 착장컷</span><span><i></i>검토 필요</span></div></div><div id="bars"></div></article>
     <article class="panel">
-      <div class="panel-title"><div><h2>기준 얼굴 유사도</h2><p>같은 브랜드의 남성·여성 기준 이미지와 모두 비교합니다.</p></div><a href="#products" id="similar-link">유사 상품 보기 →</a></div>
-      <div class="table-scroll"><table aria-label="카테고리별 기준 얼굴 유사도">
-        <thead><tr><th scope="col">카테고리</th><th scope="col">전체 상품</th><th scope="col">착장컷</th><th scope="col">비교 완료</th><th scope="col">유사 상품</th><th scope="col">전체 상품 대비</th><th scope="col">착장컷 대비</th></tr></thead>
+      <div class="panel-title"><div><h2>AI 모델 착장컷</h2><p>같은 브랜드의 기준 얼굴과 비교한 결과와 운영자 분류를 반영합니다.</p></div><a href="#products" id="similar-link">AI 모델 착장컷 보기 →</a></div>
+      <div class="table-scroll"><table aria-label="카테고리별 AI 모델 착장컷">
+        <thead><tr><th scope="col">카테고리</th><th scope="col">전체 상품</th><th scope="col">전체 모델 착장컷</th><th scope="col">비교 완료</th><th scope="col">AI 모델 착장컷</th><th scope="col">전체 상품 대비</th><th scope="col">전체 모델 착장컷 대비</th></tr></thead>
         <tbody id="comparison"></tbody>
       </table></div>
     </article>
@@ -34,9 +34,9 @@
   </section>
   <section id="products" hidden>
     <div class="filters panel">
-      <input id="search" type="search" placeholder="상품명, ID 또는 품번" aria-label="상품 검색">
+      <input id="search" type="search" placeholder="상품명, ID 또는 스타일코드" aria-label="상품 검색">
       <select id="tab-filter" aria-label="브랜드와 탭"><option value="">모든 브랜드 · 탭</option><option value="SPAO">스파오</option><option value="SPAO:우먼">스파오 우먼</option><option value="SPAO:맨">스파오 맨</option><option value="WHO">후아유</option><option value="WHO:WOMEN">후아유 WOMEN</option><option value="WHO:MEN">후아유 MEN</option></select>
-      <select id="kind-filter" aria-label="썸네일 분류"><option value="">모든 분류</option><option value="product_only">상품 단독컷</option><option value="all_models">전체 모델 착장컷</option><option value="model">모델 착장컷</option><option value="similar">기준 얼굴 유사</option><option value="unclear">유사도 검토 필요</option><option value="unknown">미분류</option><option value="missing">품번 미확인</option></select>
+      <select id="kind-filter" aria-label="썸네일 분류"><option value="">모든 분류</option><option value="product_only">상품 단독컷</option><option value="all_models">전체 모델 착장컷</option><option value="model">일반 모델 착장컷</option><option value="similar">AI 모델 착장컷</option><option value="review">검토 필요</option><option value="missing">스타일코드 미확인</option></select>
       <span id="filtered"></span>
     </div>
     <form id="bulk-review" class="panel" aria-label="썸네일 일괄 분류" hidden>
@@ -90,8 +90,8 @@
 </dialog>
 <dialog id="edit"><form id="review"><div class="panel-title"><h2 id="edit-name"></h2><button type="button" id="close" aria-label="닫기">×</button></div>
 <img id="edit-image" alt="대표 썸네일"><a id="detail" target="_blank" rel="noopener">공식몰에서 보기 ↗</a><p id="item-error"></p>
-<label class="field">브랜드 품번 <input id="edit-code"></label>
-<label class="field">썸네일 분류 <select id="edit-type"><option value="model">모델 착장컷</option><option value="similar">기준 얼굴 유사</option><option value="unclear">유사도 검토 필요</option><option value="unscanned">모델 착장컷 · 미비교</option><option value="product_only">상품 단독컷</option><option value="unknown">미분류</option></select></label>
+<label class="field">스타일코드 <input id="edit-code"></label>
+<label class="field">썸네일 분류 <select id="edit-type"><option value="product_only">상품 단독컷</option><option value="model">일반 모델 착장컷</option><option value="similar">AI 모델 착장컷</option><option value="review">검토 필요</option></select></label>
 <p id="review-error" role="alert"></p>
 <button id="save-review" class="primary" type="submit">분류 저장</button></form></dialog>
 </body></html>

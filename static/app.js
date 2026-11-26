@@ -5,9 +5,10 @@ const number = value => value.toLocaleString("ko-KR");
 const pct = (n, d) => d ? (100 * n / d).toFixed(1) + "%" : "—";
 const brands = {SPAO: "스파오", WHO: "후아유"};
 const kinds = {
-  model: "모델 착장컷", similar: "기준 얼굴 유사", unclear: "유사도 검토 필요",
-  product_only: "상품 단독컷", unknown: "미분류"
+  product_only: "상품 단독컷", model: "일반 모델 착장컷", similar: "AI 모델 착장컷", review: "검토 필요"
 };
+const generalModels = summary => summary.model - summary.match - summary.unclear;
+const needsReview = summary => summary.unknown + summary.unclear;
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
 const selection = new Set();
@@ -64,25 +65,26 @@ async function select(id) {
 function render() {
   if (!current) return;
   const s = current.summary;
-  $("source").textContent = `${current.source} · ${s.unknown}개 미분류 · ${s.code}/${s.total}개 품번 확인`;
+  $("source").textContent = `${current.source} · ${number(needsReview(s))}개 검토 필요 · ${s.code}/${s.total}개 스타일코드 확인`;
   const metrics = [
     ["전체 상품", s.total, "브랜드별 중복 제외"],
-    ["상품 단독컷", s.product, pct(s.product, s.total) + " · 전체 대비"],
-    ["모델 착장컷", s.model, pct(s.model, s.total) + " · 전체 대비"],
-    ["기준 얼굴 유사", s.match, pct(s.match, s.model) + " · 착장컷 대비"]
+    [kinds.product_only, s.product, pct(s.product, s.total) + " · 전체 대비"],
+    [kinds.model, generalModels(s), pct(generalModels(s), s.total) + " · 전체 대비"],
+    [kinds.similar, s.match, pct(s.match, s.model) + " · 전체 모델 착장컷 대비"]
   ];
   $("metrics").innerHTML = metrics.map(([title, count, label]) =>
     `<div class="metric"><span>${title}</span><strong>${number(count)}</strong><small>${label}</small></div>`).join("");
   $("bars").innerHTML = current.groups.map(g => {
     const label = g.tab || brands[g.brand];
-    const detail = `${label} · 단독 ${g.product} · 착장 ${g.model} · 미분류 ${g.unknown}`;
-    const parts = [g.product, g.model, g.unknown].map(n => `<i style="width:${g.total ? 100 * n / g.total : 0}%"></i>`).join("");
+    const counts = [g.product, generalModels(g), g.match, needsReview(g)];
+    const detail = [label, ...Object.values(kinds).map((name, index) => `${name} ${number(counts[index])}개`)].join(" · ");
+    const parts = counts.map(n => `<i style="width:${g.total ? 100 * n / g.total : 0}%"></i>`).join("");
     return `<div class="bar-row ${g.tab ? "sub" : ""}"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(detail)}" title="${esc(detail)}">${parts}</div><strong>${pct(g.model, g.total)}</strong></div>`;
   }).join("");
   $("comparison").innerHTML = current.groups.filter(g => g.tab).map(g =>
     `<tr><th scope="row">${esc(brands[g.brand])} ${esc(g.tab)}</th><td>${number(g.total)}</td>
       <td>${number(g.model)}</td><td>${number(g.compared)}</td>
-      <td><a href="#products" data-similar-tab="${esc(g.brand + ":" + g.tab)}" aria-label="${esc(brands[g.brand] + " " + g.tab + " 유사 상품 보기")}">${number(g.match)}</a></td>
+      <td><a href="#products" data-similar-tab="${esc(g.brand + ":" + g.tab)}" aria-label="${esc(brands[g.brand] + " " + g.tab + " AI 모델 착장컷 보기")}">${number(g.match)}</a></td>
       <td>${pct(g.match, g.total)}</td><td>${pct(g.match, g.model)}</td></tr>`).join("");
   $("history").innerHTML = state.runs.slice(0, 6).map(r =>
     `<button class="history-row" data-run="${esc(r.id)}" type="button"><span>${esc(date(r.at))} · ${esc(r.source)}</span><b>${number(r.summary.total)}개 · ${pct(r.summary.model, r.summary.total)}</b></button>`).join("");
@@ -96,15 +98,16 @@ function imageUrl(row) {
   return row.image_file ? `/images/${encodeURIComponent(current.id)}/${encodeURIComponent(row.image_file)}` : row.thumbnail_url;
 }
 function classification(row) {
-  if (row.thumbnail_type === "model" && ["similar", "unclear"].includes(row.similarity)) {
-    return row.similarity;
-  }
-  return row.thumbnail_type;
+  if (row.thumbnail_type === "product_only") return "product_only";
+  if (row.thumbnail_type !== "model" || row.similarity === "unclear") return "review";
+  return row.similarity === "similar" ? "similar" : "model";
 }
-function reviewFields(kind) {
-  const thumbnailType = ["product_only", "unknown"].includes(kind) ? kind : "model";
-  const similarity = thumbnailType !== "model" ? "not_applicable" : kind === "model" ? "other" : kind;
-  return {thumbnail_type: thumbnailType, similarity};
+function reviewFields(kind, row) {
+  if (kind === "product_only" || kind === "review") {
+    return {thumbnail_type: kind, similarity: "not_applicable"};
+  }
+  const similarity = kind === "similar" ? "similar" : row && classification(row) === "model" ? row.similarity : "other";
+  return {thumbnail_type: "model", similarity};
 }
 function selectPageBoxes() {
   return [...$("gallery").querySelectorAll("[data-select-product]")];
@@ -153,7 +156,7 @@ function gallery() {
   $("gallery").innerHTML = filtered.slice(page * pageSize, (page + 1) * pageSize).map(r => {
     const label = kinds[classification(r)];
     const key = esc(r.brand + ":" + r.product_id);
-    return `<div class="card-tile"><button class="card" data-product="${key}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "품번 미확인")} · ${esc(r.product_id)}</small></button><label class="card-select" hidden><input type="checkbox" data-select-product="${key}" aria-label="${esc(r.name + " · " + r.product_id + " 선택")}"></label></div>`;
+    return `<div class="card-tile"><button class="card" data-product="${key}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "스타일코드 미확인")} · ${esc(r.product_id)}</small></button><label class="card-select" hidden><input type="checkbox" data-select-product="${key}" aria-label="${esc(r.name + " · " + r.product_id + " 선택")}"></label></div>`;
   }).join("") || "<p>조건에 맞는 상품이 없습니다.</p>";
   $("pagination").innerHTML = `<button id="prev" ${page ? "" : "disabled"}>이전</button><span>${page + 1} / ${pages}</span><button id="next" ${page + 1 < pages ? "" : "disabled"}>다음</button>`;
   renderSelection();
@@ -163,10 +166,9 @@ function edit(row) {
   $("edit-name").textContent = row.name;
   $("edit-image").src = imageUrl(row);
   $("detail").href = row.detail_url || row.list_url;
-  $("item-error").textContent = row.error || (row.price ? number(row.price) + "원" : "");
+  $("item-error").textContent = row.error?.replace("품번: ", "스타일코드: ") || (row.price ? number(row.price) + "원" : "");
   $("edit-code").value = row.code;
-  const kind = classification(row);
-  $("edit-type").value = kind === "model" && row.similarity !== "other" ? "unscanned" : kind;
+  $("edit-type").value = classification(row);
   $("review-error").textContent = "";
   $("save-review").disabled = Boolean(demo) || state.operator === false;
   $("edit").showModal();
@@ -413,7 +415,7 @@ $("review").onsubmit = async e => {
   try {
     await send(`/api/runs/${run_id}/product`, {
       brand, product_id, code: $("edit-code").value,
-      ...reviewFields($("edit-type").value)
+      ...reviewFields($("edit-type").value, item)
     }, "PATCH");
   } catch (error) {
     if (editing === item && $("edit").open) {

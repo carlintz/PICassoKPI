@@ -292,7 +292,7 @@ def process_product(row, classifier, old, directory, ocr_budget=0):
         try:
             row["code"] = who_code(row["detail_url"], ocr_budget)
         except Exception as error:
-            messages.append(f"품번: {error}")
+            messages.append(f"스타일코드: {error}")
     row["code_status"] = "found" if row["code"] else "missing"
     row["error"] = " · ".join(messages)
     return row
