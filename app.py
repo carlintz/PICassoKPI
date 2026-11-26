@@ -16,6 +16,7 @@ from PIL import Image, ImageOps
 
 from collect import TABS, collect, fetch
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_path
+from reviews import apply_review, review_changes
 from snapshots import public, seed_snapshot
 from vision import Vision
 
@@ -213,28 +214,20 @@ def reference():
 
 
 @app.patch("/api/runs/<run_id>/product")
-def review(run_id):
-    data = request.get_json()
-    kind, similar = data.get("thumbnail_type"), data.get("similarity")
-    if kind not in ("model", "product_only", "unknown") or similar not in (
-        "similar", "other", "unclear", "unscanned", "not_applicable"
-    ):
-        return jsonify(error="분류 값을 확인하세요."), 400
+@app.patch("/api/runs/<run_id>/products", defaults={"bulk": True})
+def review(run_id, bulk=False):
+    try:
+        keys, changes = review_changes(request.get_json(silent=True), bulk)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     with lock:
         run = snapshot(run_id)
         if not run:
             return jsonify(error="수집 기록이 없습니다."), 404
-        item = next((r for r in run["products"] if r["brand"] == data.get("brand")
-                     and r["product_id"] == data.get("product_id")), None)
-        if item is None:
-            return jsonify(error="상품이 없습니다."), 404
-        item.update(thumbnail_type=kind, similarity=similar if kind == "model" else "not_applicable",
-                    code=str(data.get("code", ""))[:40].strip(), reviewed=True)
-        if kind != "model":
-            item["score"] = None
-        item["code_status"] = "found" if item["code"] else "missing"
+        if not apply_review(run["products"], keys, changes):
+            return jsonify(error="이 수집 기록에 없는 상품이 선택되었습니다."), 404
         save(DATA / f"run-{run_id}.json", run)
-    return jsonify(ok=True)
+    return jsonify(ok=True, updated=len(keys))
 
 
 @app.get("/api/runs/<run_id>/csv")

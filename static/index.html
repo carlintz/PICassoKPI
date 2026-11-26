@@ -39,6 +39,18 @@
       <select id="kind-filter" aria-label="썸네일 분류"><option value="">모든 분류</option><option value="product_only">상품 단독컷</option><option value="all_models">전체 모델 착장컷</option><option value="model">모델 착장컷</option><option value="similar">기준 얼굴 유사</option><option value="unclear">유사도 검토 필요</option><option value="unknown">미분류</option><option value="missing">품번 미확인</option></select>
       <span id="filtered"></span>
     </div>
+    <form id="bulk-review" class="panel" aria-label="썸네일 일괄 분류" hidden>
+      <div class="bulk-selection">
+        <label><input id="select-page" type="checkbox"> 현재 페이지 전체 선택</label>
+        <span id="bulk-count" role="status">0개 선택</span>
+        <button id="clear-selection" type="button" disabled>선택 해제</button>
+      </div>
+      <div class="bulk-actions">
+        <select id="bulk-type" aria-label="일괄 적용할 분류" required disabled><option value="">분류 선택</option></select>
+        <button id="save-bulk" class="primary" type="submit" disabled>일괄 분류 저장</button>
+      </div>
+      <p id="bulk-error" role="alert" hidden></p>
+    </form>
     <div id="gallery"></div><div id="pagination"></div>
   </section>
   <section id="settings" hidden class="split">

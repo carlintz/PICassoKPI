@@ -20,6 +20,7 @@ from flask import Flask, Response, jsonify, request, session
 import cloud_store as db
 from collect import list_products, process_product
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
+from reviews import apply_review, review_changes
 from snapshots import public, seed_snapshot
 from vision import Vision
 
@@ -180,32 +181,31 @@ def reference():
 
 
 @app.patch("/api/runs/<run_id>/product")
-def review(run_id):
+@app.patch("/api/runs/<run_id>/products", defaults={"bulk": True})
+def review(run_id, bulk=False):
     ident = snapshot_id(run_id)
-    data = request.get_json(silent=True) or {}
-    kind, similarity = data.get("thumbnail_type"), data.get("similarity")
-    if not ident or data.get("brand") not in {"WHO", "SPAO"} or not re.fullmatch(r"[0-9]+", str(data.get("product_id", ""))):
-        return jsonify(error="상품이 없습니다."), 404
-    if kind not in {"model", "product_only", "unknown"} or similarity not in {
-        "similar", "other", "unclear", "unscanned", "not_applicable"
-    }:
-        return jsonify(error="분류 값을 확인하세요."), 400
-    run = db.first("picasso_runs", id=f"eq.{ident}", status="eq.complete", select=LATEST)
-    filters = {"run_id": f"eq.{ident}", "brand": f"eq.{data['brand']}",
-               "product_id": f"eq.{data['product_id']}"}
-    selected = db.first("picasso_products", **filters, select="result") if run else None
-    if not selected:
-        return jsonify(error="상품이 없습니다."), 404
-    row = selected["result"]
-    code = str(data.get("code", ""))[:40].strip()
-    row.update(thumbnail_type=kind, code=code, code_status="found" if code else "missing", reviewed=True,
-               similarity=similarity if kind == "model" else "not_applicable")
-    if kind != "model":
-        row["score"] = None
-    db.rest("picasso_products", method="PATCH", query=filters, body={"result": row})
-    summary = public(snapshot(run, [p["result"] for p in db.product_rows(ident)]))
-    db.rest("picasso_runs", method="PATCH", query={"id": f"eq.{ident}"}, body={"summary": summary})
-    return jsonify(ok=True)
+    if not ident:
+        return jsonify(error="수집 기록이 없습니다."), 404
+    try:
+        keys, changes = review_changes(request.get_json(silent=True), bulk)
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+
+    products = [{"brand": brand, "product_id": pid} for brand, pid in sorted(keys)]
+    for _ in range(3):
+        run = db.first("picasso_runs", id=f"eq.{ident}", status="eq.complete", select="id,created_at,review_version")
+        if not run:
+            return jsonify(error="수집 기록이 없습니다."), 404
+        rows = [p["result"] for p in db.product_rows(ident)]
+        if not apply_review(rows, keys, changes):
+            return jsonify(error="이 수집 기록에 없는 상품이 선택되었습니다."), 404
+        report = public(snapshot(run, rows))
+        saved = db.rest("rpc/picasso_review_products", method="POST",
+                        body={"target_run": ident, "expected_version": run["review_version"],
+                              "products": products, "changes": changes, "report": report})
+        if saved:
+            return jsonify(ok=True, updated=len(keys))
+    return jsonify(error="수집 기록에 다른 변경이 저장되었습니다. 다시 시도하세요."), 409
 
 
 @app.get("/images/<run_id>/<filename>")

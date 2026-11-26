@@ -10,7 +10,9 @@ const kinds = {
 };
 const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
 const pageSize = 30;
+const selection = new Set();
 let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
+let savingBulk = false;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -49,11 +51,14 @@ function go() {
 async function select(id) {
   if (!id) return;
   const result = demo ? demo.run : await api("/api/runs/" + encodeURIComponent(id));
+  if (current?.id !== result.id) {
+    clearSelection();
+    page = 0;
+  }
   current = result;
   $("runs").value = id;
   $("export").href = demo ? "/demo.csv" : "/api/runs/" + encodeURIComponent(id) + "/csv";
   if (demo) $("export").download = "picasso-demo.csv";
-  page = 0;
   render();
 }
 function render() {
@@ -96,6 +101,42 @@ function classification(row) {
   }
   return row.thumbnail_type;
 }
+function reviewFields(kind) {
+  const thumbnailType = ["product_only", "unknown"].includes(kind) ? kind : "model";
+  const similarity = thumbnailType !== "model" ? "not_applicable" : kind === "model" ? "other" : kind;
+  return {thumbnail_type: thumbnailType, similarity};
+}
+function selectPageBoxes() {
+  return [...$("gallery").querySelectorAll("[data-select-product]")];
+}
+function bulkError(message = "") {
+  $("bulk-error").textContent = message;
+  $("bulk-error").hidden = !message;
+}
+function clearSelection() {
+  selection.clear();
+  $("bulk-type").value = "";
+  bulkError();
+}
+function renderSelection() {
+  const allowed = Boolean(current) && !demo && state.operator !== false;
+  const boxes = selectPageBoxes();
+  $("bulk-review").hidden = !allowed;
+  for (const box of boxes) {
+    box.closest("label").hidden = !allowed;
+    box.disabled = !allowed || savingBulk;
+    box.checked = selection.has(box.dataset.selectProduct);
+  }
+  const checked = boxes.filter(box => box.checked).length;
+  $("select-page").checked = checked > 0 && checked === boxes.length;
+  $("select-page").indeterminate = checked > 0 && checked < boxes.length;
+  $("select-page").disabled = savingBulk || !boxes.length;
+  $("bulk-count").textContent = `${number(selection.size)}개 선택`;
+  $("clear-selection").disabled = savingBulk || !selection.size;
+  $("bulk-type").disabled = savingBulk || !selection.size;
+  $("save-bulk").disabled = !allowed || savingBulk || !selection.size || !$("bulk-type").value;
+  $("save-bulk").textContent = savingBulk ? "저장 중…" : "일괄 분류 저장";
+}
 function gallery() {
   if (!current || $("products").hidden) return;
   const term = $("search").value.trim().toLowerCase();
@@ -111,9 +152,11 @@ function gallery() {
   $("filtered").textContent = `${number(filtered.length)}개 상품`;
   $("gallery").innerHTML = filtered.slice(page * pageSize, (page + 1) * pageSize).map(r => {
     const label = kinds[classification(r)];
-    return `<button class="card" data-product="${esc(r.brand + ":" + r.product_id)}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "품번 미확인")} · ${esc(r.product_id)}</small></button>`;
+    const key = esc(r.brand + ":" + r.product_id);
+    return `<div class="card-tile"><button class="card" data-product="${key}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "품번 미확인")} · ${esc(r.product_id)}</small></button><label class="card-select" hidden><input type="checkbox" data-select-product="${key}" aria-label="${esc(r.name + " · " + r.product_id + " 선택")}"></label></div>`;
   }).join("") || "<p>조건에 맞는 상품이 없습니다.</p>";
   $("pagination").innerHTML = `<button id="prev" ${page ? "" : "disabled"}>이전</button><span>${page + 1} / ${pages}</span><button id="next" ${page + 1 < pages ? "" : "disabled"}>다음</button>`;
+  renderSelection();
 }
 function edit(row) {
   editing = {...row, run_id: current.id};
@@ -195,7 +238,10 @@ async function sync(initial = false) {
       $("enabled").checked = schedule.enabled;
       $("time").value = schedule.time;
       await select($("runs").value);
-    } else if (current) renderHistory();
+    } else if (current) {
+      renderHistory();
+      if (!$("products").hidden) renderSelection();
+    }
     renderReferences();
   } finally { syncing = false; }
 }
@@ -244,6 +290,7 @@ function showSimilar(tab = "") {
   $("tab-filter").value = tab;
   $("kind-filter").value = "similar";
   $("search").value = "";
+  clearSelection();
   page = 0;
   gallery();
 }
@@ -252,10 +299,62 @@ $("comparison").onclick = e => {
   const link = e.target.closest("[data-similar-tab]");
   if (link) showSimilar(link.dataset.similarTab);
 };
-for (const id of ["search", "tab-filter", "kind-filter"]) $(id).oninput = () => { page = 0; gallery(); };
+for (const id of ["search", "tab-filter", "kind-filter"]) $(id).oninput = () => {
+  clearSelection();
+  page = 0;
+  gallery();
+};
 $("gallery").onclick = e => {
   const key = e.target.closest("[data-product]")?.dataset.product;
   if (key) edit(current.products.find(r => r.brand + ":" + r.product_id === key));
+};
+function toggleProduct(box, checked) {
+  const key = box.dataset.selectProduct;
+  if (checked) selection.add(key);
+  else selection.delete(key);
+}
+$("gallery").onchange = e => {
+  if (!e.target.matches("[data-select-product]")) return;
+  toggleProduct(e.target, e.target.checked);
+  renderSelection();
+};
+$("select-page").onchange = e => {
+  for (const box of selectPageBoxes()) toggleProduct(box, e.target.checked);
+  renderSelection();
+};
+$("clear-selection").onclick = () => { clearSelection(); renderSelection(); };
+$("bulk-type").append(...Array.from($("edit-type").options, option => option.cloneNode(true)));
+$("bulk-type").onchange = renderSelection;
+$("bulk-review").onsubmit = async e => {
+  e.preventDefault();
+  if ($("save-bulk").disabled) return;
+  const id = current.id;
+  const products = Array.from(selection, key => {
+    const [brand, product_id] = key.split(":");
+    return {brand, product_id};
+  });
+  const fields = reviewFields($("bulk-type").value);
+  savingBulk = true;
+  bulkError();
+  renderSelection();
+  let result;
+  try {
+    result = await send(`/api/runs/${encodeURIComponent(id)}/products`, {products, ...fields}, "PATCH");
+  } catch (error) {
+    bulkError(error.message);
+  } finally {
+    savingBulk = false;
+    if (result && current.id === id) clearSelection();
+    renderSelection();
+  }
+  if (!result) return;
+  const message = `${number(result.updated)}개 상품의 분류를 저장했습니다.`;
+  try {
+    if (current.id === id) await select(id);
+    notice(message);
+  } catch {
+    notice(`${message} 최신 목록을 보려면 페이지를 새로고침하세요.`, true);
+  }
 };
 $("pagination").onclick = e => {
   if (e.target.id === "prev") page--;
@@ -309,15 +408,12 @@ $("review").onsubmit = async e => {
   if (save.disabled) return;
   const item = editing;
   const {run_id, brand, product_id} = item;
-  const kind = $("edit-type").value;
-  const thumbnailType = ["product_only", "unknown"].includes(kind) ? kind : "model";
-  const similarity = thumbnailType !== "model" ? "not_applicable" : kind === "model" ? "other" : kind;
   save.disabled = true;
   $("review-error").textContent = "";
   try {
     await send(`/api/runs/${run_id}/product`, {
       brand, product_id, code: $("edit-code").value,
-      thumbnail_type: thumbnailType, similarity
+      ...reviewFields($("edit-type").value)
     }, "PATCH");
   } catch (error) {
     if (editing === item && $("edit").open) {
