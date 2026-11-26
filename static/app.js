@@ -69,7 +69,7 @@ function render() {
   const metrics = [
     ["전체 상품", s.total, "브랜드별 중복 제외"],
     [kinds.product_only, s.product, pct(s.product, s.total) + " · 전체 대비"],
-    [kinds.model, generalModels(s), pct(generalModels(s), s.total) + " · 전체 대비"],
+    [kinds.model, generalModels(s), pct(generalModels(s), s.model) + " · 전체 모델 착장컷 대비"],
     [kinds.similar, s.match, pct(s.match, s.model) + " · 전체 모델 착장컷 대비"]
   ];
   $("metrics").innerHTML = metrics.map(([title, count, label]) =>
@@ -79,11 +79,11 @@ function render() {
     const counts = [g.product, generalModels(g), g.match, needsReview(g)];
     const detail = [label, ...Object.values(kinds).map((name, index) => `${name} ${number(counts[index])}개`)].join(" · ");
     const parts = counts.map(n => `<i style="width:${g.total ? 100 * n / g.total : 0}%"></i>`).join("");
-    return `<div class="bar-row ${g.tab ? "sub" : ""}"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(detail)}" title="${esc(detail)}">${parts}</div><strong>${pct(g.model, g.total)}</strong></div>`;
+    return `<div class="bar-row ${g.tab ? "sub" : ""}"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(detail)}" title="${esc(detail)}">${parts}</div><strong>${pct(g.match, g.model)}</strong></div>`;
   }).join("");
   $("comparison").innerHTML = current.groups.filter(g => g.tab).map(g =>
     `<tr><th scope="row">${esc(brands[g.brand])} ${esc(g.tab)}</th><td>${number(g.total)}</td>
-      <td>${number(g.model)}</td><td>${number(g.compared)}</td>
+      <td>${number(g.model)}</td>
       <td><a href="#products" data-similar-tab="${esc(g.brand + ":" + g.tab)}" aria-label="${esc(brands[g.brand] + " " + g.tab + " AI 모델 착장컷 보기")}">${number(g.match)}</a></td>
       <td>${pct(g.match, g.total)}</td><td>${pct(g.match, g.model)}</td></tr>`).join("");
   $("history").innerHTML = state.runs.slice(0, 6).map(r =>
