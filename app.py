@@ -5,18 +5,18 @@ import json
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from PIL import Image, ImageOps
 
-from collect import TABS, collect, fetch
+from collect import ProductListError, TABS, collect, fetch
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_path
 from reviews import apply_review, review_changes
+from schedule_rules import LOG_PAGE_SIZE, SEOUL, advance_schedule, failure_reason, is_due, next_occurrence, parse_schedule, schedule_value
 from snapshots import SEED_ID, local_weekly, public, seed_snapshot
 from vision import Vision
 
@@ -30,7 +30,6 @@ WEB_USER = os.environ.get("PICASSO_WEB_USER", "")
 WEB_PASSWORD = os.environ.get("PICASSO_WEB_PASSWORD", "")
 if bool(WEB_USER) != bool(WEB_PASSWORD):
     raise RuntimeError("Set both PICASSO_WEB_USER and PICASSO_WEB_PASSWORD.")
-SEOUL = ZoneInfo("Asia/Seoul")
 app = Flask(__name__, static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 lock = Lock()
@@ -95,7 +94,7 @@ def seed():
 
 
 def options():
-    return load(DATA / "schedule.json", {"enabled": False, "time": "09:00", "last": ""})
+    return schedule_value(load(DATA / "schedule.json"))
 
 
 def progress(done, total):
@@ -113,11 +112,10 @@ def reference_library(embeddings=False):
     return entries
 
 
-def work():
-    run_id = now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+def work(run_id, entry):
     image_dir = DATA / "images" / run_id
-    image_dir.mkdir(parents=True)
     try:
+        image_dir.mkdir(parents=True)
         prior = snapshot()
         previous = {(r["brand"], r["product_id"]): r for r in prior["products"]} if prior else {}
         references = reference_library(embeddings=True)
@@ -127,17 +125,34 @@ def work():
         reference_sets = [{k: v for k, v in entry.items() if k != "embedding"} for entry in references]
         save(DATA / f"run-{run_id}.json", {"id": run_id, "at": now().isoformat(),
              "source": "공식몰 수집", "reference_sets": reference_sets, "products": rows})
-        job.update(state="complete", message="수집 완료", id=run_id)
+        outcome = {"state": "complete", "message": "수집 완료", "id": run_id}
+        if entry:
+            entry.update(status="complete", expected_count=len(rows), errors=sum(bool(r["error"]) for r in rows))
     except Exception as error:
-        job.update(state="failed", message=str(error))
+        stage = "listing" if isinstance(error, ProductListError) else "batch"
+        detail = str(error) if isinstance(error, ProductListError) else type(error).__name__
+        message = failure_reason(stage, detail)
+        outcome = {"state": "failed", "message": message, "id": run_id}
+        if entry:
+            entry.update(status="failed", error=message, failure_stage=stage)
+    if entry:
+        entry["finished_at"] = now().isoformat()
+        save(DATA / f"scheduled-{run_id}.json", entry)
+    job.update(outcome)
 
 
-def launch():
+def launch(scheduled_at=None):
     if job["state"] == "running":
         return False
+    stamp = now()
+    run_id = stamp.strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+    entry = None
+    if scheduled_at:
+        entry = {"id": run_id, "created_at": stamp.isoformat(), "scheduled_at": scheduled_at, "status": "running"}
+        save(DATA / f"scheduled-{run_id}.json", entry)
     job.clear()
     job.update(state="running", done=0, total=0, message="상품 목록 수집 중")
-    Thread(target=work, daemon=True).start()
+    Thread(target=work, args=(run_id, entry), daemon=True).start()
     return True
 
 
@@ -145,11 +160,34 @@ def scheduler():
     while True:
         with lock:
             rule = options()
-            date = now().date().isoformat()
-            if rule["enabled"] and rule["last"] != date and now().strftime("%H:%M") >= rule["time"]:
-                if launch():
-                    save(DATA / "schedule.json", dict(rule, last=date))
+            stamp = now()
+            if is_due(rule, stamp) and job["state"] != "running":
+                due = rule["next_at"]
+                already_started = any(load(path)["scheduled_at"] == due for path in DATA.glob("scheduled-*.json"))
+                if already_started or launch(due):
+                    save(DATA / "schedule.json", advance_schedule(rule, stamp))
         time.sleep(15)
+
+
+def restore_schedule():
+    path = DATA / "schedule.json"
+    stored = load(path)
+    if isinstance(stored, dict) and "cadence" not in stored:
+        rule = schedule_value(stored)
+        stamp = now()
+        after = stamp if stored.get("last") == stamp.date().isoformat() else stamp.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
+        rule["next_at"] = next_occurrence(rule, after)
+        save(path, rule)
+    for path in DATA.glob("scheduled-*.json"):
+        entry = load(path)
+        if entry["status"] == "running":
+            run = snapshot(entry["id"])
+            if run:
+                products = run["products"]
+                entry.update(status="complete", expected_count=len(products), errors=sum(bool(r["error"]) for r in products))
+            else:
+                entry.update(status="failed", failure_stage="interrupted", error=failure_reason("interrupted", "수집 서비스가 재시작됐습니다."))
+            save(path, dict(entry, finished_at=now().isoformat()))
 
 
 @app.get("/")
@@ -198,16 +236,22 @@ def collect_now():
 
 @app.post("/api/schedule")
 def schedule():
-    data = request.get_json()
     try:
-        datetime.strptime(data["time"], "%H:%M")
-        if len(data["time"]) != 5 or not isinstance(data["enabled"], bool):
-            raise ValueError
-    except (KeyError, TypeError, ValueError):
-        return jsonify(error="유효한 집계 시각을 입력하세요."), 400
+        rule = parse_schedule(request.get_json(silent=True), now())
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
     with lock:
-        save(DATA / "schedule.json", dict(options(), enabled=data["enabled"], time=data["time"]))
-    return jsonify(ok=True)
+        save(DATA / "schedule.json", rule)
+    return jsonify(ok=True, schedule=rule)
+
+
+@app.get("/api/schedule/logs")
+def schedule_logs():
+    page = max(1, request.args.get("page", default=1, type=int))
+    logs = sorted((load(path) for path in DATA.glob("scheduled-*.json")),
+                  key=lambda entry: datetime.fromisoformat(entry["scheduled_at"]), reverse=True)
+    start = (page - 1) * LOG_PAGE_SIZE
+    return jsonify(logs=logs[start:start + LOG_PAGE_SIZE], more=start + LOG_PAGE_SIZE < len(logs))
 
 
 @app.post("/api/reference")
@@ -298,6 +342,7 @@ def image(run_id, filename):
 
 
 seed()
+restore_schedule()
 
 if __name__ == "__main__":
     Thread(target=scheduler, daemon=True).start()

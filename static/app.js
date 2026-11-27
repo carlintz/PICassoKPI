@@ -17,6 +17,7 @@ let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading
 let savingBulk = false;
 let weekly, weeklyCatalog;
 let weeklyRuns = [];
+let scheduleDirty = false, logPage = 1, logRequest, loggedJob;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -54,6 +55,7 @@ function go() {
   $("title").textContent = titles[active];
   if (active === "products") gallery();
   if (active === "overview") loadWeekly();
+  if (active === "settings") loadScheduleLogs();
   if (active === "guide" && guideSection) {
     guideSection.focus({preventScroll: true});
     guideSection.scrollIntoView({block: "start"});
@@ -307,6 +309,67 @@ function renderReferences() {
   $("reference").querySelector("fieldset").disabled = Boolean(message) || uploading;
   $("reference-status").textContent = message;
 }
+function showScheduleFields() {
+  const cadence = $("schedule-cadence").value;
+  $("schedule-weekdays").hidden = $("schedule-weekdays").disabled = cadence !== "weekly";
+  $("schedule-monthly").hidden = $("schedule-month-day").disabled = cadence !== "monthly";
+  $("schedule-once").hidden = $("schedule-date").disabled = cadence !== "once";
+}
+function renderSchedule(rule) {
+  const editable = !demo && state.operator !== false;
+  $("schedule-fields").disabled = !editable;
+  $("schedule-note").textContent = editable ? "한국 시간 기준으로 실행할 일정을 설정합니다."
+    : demo ? "수집 서버 연결 후 예약을 설정할 수 있습니다." : "운영자 로그인 후 일정을 변경할 수 있습니다.";
+  if (state.scheduler_ready === false) {
+    $("schedule-note").textContent = editable ? "자동 실행 연결 대기 중 · 일정은 한국 시간 기준으로 저장할 수 있습니다."
+      : "자동 실행 연결 대기 중 · 운영자 로그인 후 일정을 저장할 수 있습니다.";
+  }
+  $("guide-schedule-availability").hidden = state.scheduler_ready !== false;
+  if (!scheduleDirty) {
+    $("enabled").checked = rule.enabled;
+    $("schedule-cadence").value = rule.cadence || "daily";
+    $("time").value = rule.time;
+    $("schedule-month-day").value = rule.month_day || 1;
+    $("schedule-date").value = rule.date || "";
+    for (const input of $("schedule-weekdays").querySelectorAll("input")) {
+      input.checked = (rule.weekdays || [1]).includes(Number(input.value));
+    }
+    showScheduleFields();
+  }
+  const prefix = state.scheduler_ready === false ? "저장된 예약" : "다음 실행";
+  $("schedule-next").textContent = `${prefix} · ${rule.next_at ? date(rule.next_at) : "예약 없음"}`;
+}
+async function loadScheduleLogs() {
+  if (!state || $("settings").hidden) return;
+  const request = {};
+  logRequest = request;
+  const status = $("schedule-log-status");
+  try {
+    const {logs, more} = demo ? {logs: [], more: false} : await api(`/api/schedule/logs?page=${logPage}`);
+    if (logRequest !== request) return;
+    const labels = {queued: "대기 중", running: "수집 중", complete: "성공", failed: "실패"};
+    const stamp = value => value ? esc(date(value)) : "—";
+    $("schedule-logs").innerHTML = logs.map(row => {
+      const finished = row.status === "complete";
+      const warning = finished && row.errors > 0;
+      const result = warning ? "성공 · 일부 오류" : labels[row.status];
+      const detail = finished ? `상품 ${number(row.expected_count)}개${warning ? ` · 오류 ${number(row.errors)}건` : ""}`
+        : row.error || "—";
+      const report = warning ? ` <a href="/api/runs/${encodeURIComponent(row.id)}/csv">CSV</a>` : "";
+      return `<tr><th scope="row">${stamp(row.scheduled_at)}</th><td>${stamp(row.created_at)}</td><td>${stamp(row.finished_at)}</td>
+        <td><span class="schedule-result" data-status="${esc(warning ? "warning" : row.status)}">${esc(result)}</span></td>
+        <td>${esc(detail)}${report}</td></tr>`;
+    }).join("");
+    status.textContent = logs.length ? "한국 시간 기준 · 최신 예약부터 표시합니다." : "아직 자동 수집 실행 기록이 없습니다.";
+    $("schedule-log-table").hidden = !logs.length && logPage === 1;
+    $("schedule-log-pages").hidden = !more && logPage === 1;
+    $("schedule-log-prev").disabled = logPage === 1;
+    $("schedule-log-next").disabled = !more;
+    $("schedule-log-page").textContent = `${logPage} 페이지`;
+  } catch {
+    if (logRequest === request) status.textContent = "실행 기록을 불러오지 못했습니다. 새로고침을 눌러 주세요.";
+  }
+}
 async function sync(initial = false) {
   if (syncing) return;
   syncing = true;
@@ -334,7 +397,6 @@ async function sync(initial = false) {
     }
     if (demo) {
       state = demo.state;
-      $("schedule").querySelectorAll("input, button").forEach(input => { input.disabled = true; });
     }
     const {job, runs, schedule} = state;
     const selected = current?.id;
@@ -342,13 +404,7 @@ async function sync(initial = false) {
     $("runs").value = selected || runs[0]?.id || "";
     $("collect").disabled = Boolean(demo) || job.state === "running";
     $("operator-login").hidden = state.operator !== false;
-    if (!demo) {
-      $("schedule").querySelector("button").disabled = state.operator === false;
-      $("enabled").disabled = Boolean(state.scheduling_paused);
-      if (state.scheduling_paused) {
-        $("schedule-note").textContent = "자동 실행 보류 중 · 한국 시간 기준 시각을 저장할 수 있습니다.";
-      }
-    }
+    renderSchedule(schedule);
     if (demo) notice("검증 데이터 미리보기 · 수집 서버 연결 후 새 수집과 설정 변경을 사용할 수 있습니다.");
     $("collect").textContent = job.state === "running" ? "수집 중…" : "↻ 지금 수집";
     if (job.state === "running") notice(job.total ? `수집·분류 중 ${job.done} / ${job.total}개` : job.message);
@@ -359,8 +415,6 @@ async function sync(initial = false) {
     }
     lastJob = job.state;
     if (initial) {
-      $("enabled").checked = schedule.enabled;
-      $("time").value = schedule.time;
       await select($("runs").value);
     } else if (current) {
       renderHistory();
@@ -368,6 +422,11 @@ async function sync(initial = false) {
     }
     renderReferences();
     loadWeekly();
+    const latestJob = `${job.id}:${job.state}:${job.total}`;
+    if (loggedJob !== latestJob) {
+      loggedJob = latestJob;
+      if (logPage === 1) loadScheduleLogs();
+    }
   } finally { syncing = false; }
 }
 function renderHistory() {
@@ -493,10 +552,20 @@ $("pagination").onclick = e => {
   else return;
   gallery();
 };
+$("schedule").oninput = () => { scheduleDirty = true; showScheduleFields(); };
+$("schedule-log-refresh").onclick = loadScheduleLogs;
+$("schedule-log-prev").onclick = () => { if (logPage > 1) { logPage--; loadScheduleLogs(); } };
+$("schedule-log-next").onclick = () => { logPage++; loadScheduleLogs(); };
 $("schedule").onsubmit = e => {
   e.preventDefault();
   action(async () => {
-    await send("/api/schedule", {enabled: $("enabled").checked, time: $("time").value});
+    const {schedule} = await send("/api/schedule", {enabled: $("enabled").checked, time: $("time").value,
+      cadence: $("schedule-cadence").value,
+      weekdays: Array.from($("schedule-weekdays").querySelectorAll("input:checked"), input => Number(input.value)),
+      month_day: Number($("schedule-month-day").value), date: $("schedule-date").value});
+    state.schedule = schedule;
+    scheduleDirty = false;
+    renderSchedule(schedule);
     notice("자동 수집 설정을 저장했습니다.");
   });
 };

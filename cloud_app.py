@@ -18,9 +18,10 @@ from uuid import UUID
 from flask import Flask, Response, jsonify, request, session
 
 import cloud_store as db
-from collect import list_products, process_product
+from collect import ProductListError, list_products, process_product
 from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
 from reviews import apply_review, review_changes
+from schedule_rules import FAILURE_STAGES, LOG_PAGE_SIZE, advance_schedule, failure_reason, is_due, parse_schedule, schedule_value
 from snapshots import INVALID_COMPARISON, public, seed_snapshot, weekly_public
 from vision import Vision
 
@@ -57,6 +58,8 @@ def authorize():
 @app.errorhandler(db.StoreError)
 def storage_error(error):
     app.logger.warning("Supabase status %s", error.status)
+    if request.path.startswith("/internal/"):
+        return jsonify(error=f"저장소 요청 오류 (HTTP {error.status})"), 502
     return jsonify(error="Supabase 요청을 처리하지 못했습니다."), 502
 
 
@@ -117,8 +120,8 @@ def state():
         references.append(legacy_entry(legacy))
     return jsonify(runs=summaries, job=job, references=reference_counts(references),
                    vision=Vision(MODELS).can_compare,
-                   schedule={"enabled": False, "time": db.setting("schedule", "09:00")},
-                   operator=bool(session.get("operator")), scheduling_paused=True)
+                   schedule=schedule_value(db.setting("schedule")), scheduler_ready=bool(db.setting("scheduler_ready")),
+                   operator=bool(session.get("operator")))
 
 
 @app.get("/api/runs/<run_id>")
@@ -175,11 +178,21 @@ def export(run_id):
 
 @app.post("/api/schedule")
 def schedule():
-    data = request.get_json(silent=True) or {}
-    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", str(data.get("time", ""))) or data.get("enabled") is not False:
-        return jsonify(error="자동 실행은 보류 중입니다. 시각만 저장할 수 있습니다."), 400
-    db.save_setting("schedule", data["time"])
-    return jsonify(ok=True)
+    try:
+        rule = parse_schedule(request.get_json(silent=True), datetime.now(timezone.utc))
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    db.save_setting("schedule", rule)
+    return jsonify(ok=True, schedule=rule)
+
+
+@app.get("/api/schedule/logs")
+def schedule_logs():
+    page = max(1, request.args.get("page", default=1, type=int))
+    rows = db.rest("picasso_runs", query={"scheduled_at": "not.is.null", "order": "scheduled_at.desc",
+                   "select": "id,scheduled_at,created_at,finished_at,status,error,failure_stage,expected_count,errors:summary->summary->errors",
+                   "limit": LOG_PAGE_SIZE + 1, "offset": (page - 1) * LOG_PAGE_SIZE})
+    return jsonify(logs=rows[:LOG_PAGE_SIZE], more=len(rows) > LOG_PAGE_SIZE)
 
 
 def active_run():
@@ -247,15 +260,37 @@ def image(run_id, filename):
     return Response(db.get_image(path), mimetype="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
+def collection_references():
+    references = db.reference_rows(embeddings=True)
+    legacy = db.setting("reference")
+    if legacy and not any(row["brand"] == "WHO" and row["storage_path"] == legacy for row in references):
+        references.append(legacy_embedding(legacy_entry(legacy), db.get_image(legacy), MODELS))
+    return references
+
+
+@app.post("/internal/schedule/tick")
+def tick():
+    if not db.setting("scheduler_ready"):
+        return jsonify(id=None)
+    queued = db.first("picasso_runs", status="eq.queued", scheduled_at="not.is.null", select="id")
+    if queued:
+        return jsonify(id=queued["id"])
+    stored = db.setting("schedule")
+    rule = schedule_value(stored)
+    current_time = datetime.now(timezone.utc)
+    if not is_due(rule, current_time):
+        return jsonify(id=None)
+    ident = db.rest("rpc/picasso_claim_scheduled", method="POST",
+                    body={"expected_rule": stored, "following_rule": advance_schedule(rule, current_time)})
+    return jsonify(id=ident)
+
+
 @app.post("/internal/start")
 def start():
     if not session.get("operator"):
         return jsonify(error="운영자 로그인이 필요합니다."), 401
     prior = db.first("picasso_runs", status="eq.complete", select="id", order="created_at.desc")
-    references = db.reference_rows(embeddings=True)
-    legacy = db.setting("reference")
-    if legacy and not any(row["brand"] == "WHO" and row["storage_path"] == legacy for row in references):
-        references.append(legacy_embedding(legacy_entry(legacy), db.get_image(legacy), MODELS))
+    references = collection_references()
     try:
         active = db.rest("picasso_runs", method="POST",
                          body={"reference_sets": references,
@@ -277,12 +312,19 @@ def plan(run_id):
     if not run or run["status"] in {"complete", "failed"}:
         return jsonify(batches=0)
     if run["status"] == "queued":
-        items = list_products()
+        if run.get("scheduled_at"):
+            references = collection_references()
+        else:
+            references = run["reference_sets"]
+        try:
+            items = list_products()
+        except ProductListError as error:
+            return jsonify(error=str(error)), 502
         for row in items:
             row["product_id"] = str(row["product_id"])
         db.rest("picasso_runs", method="PATCH",
                 query={**filters, "status": "eq.queued"},
-                body={"manifest": items, "expected_count": len(items), "status": "running"})
+                body={"manifest": items, "expected_count": len(items), "status": "running", "reference_sets": references})
         run = db.first("picasso_runs", **filters)
     return jsonify(batches=(run["expected_count"] + BATCH_SIZE - 1) // BATCH_SIZE)
 
@@ -344,7 +386,12 @@ def batch(run_id, index):
 
 @app.post("/internal/fail/<uuid:run_id>")
 def fail(run_id):
+    data = request.get_json(silent=True) or {}
+    stage = data.get("stage")
+    if not isinstance(stage, str) or stage not in FAILURE_STAGES:
+        stage = "dispatch"
+    detail = data.get("detail") if isinstance(data.get("detail"), str) else ""
     db.rest("picasso_runs", method="PATCH", query={"id": f"eq.{run_id}", "status": "in.(queued,running)"},
-            body={"status": "failed", "error": "수집 작업이 여러 번 실패했습니다. 다시 실행해 주세요.",
+            body={"status": "failed", "failure_stage": stage, "error": failure_reason(stage, detail),
                   "finished_at": datetime.now(timezone.utc).isoformat()})
     return jsonify(ok=True)

@@ -38,6 +38,10 @@
       }
     },
     {
+      "source": "/api/schedule/tick",
+      "destination": {"service": "dispatch"}
+    },
+    {
       "source": "/(.*)",
       "destination": {
         "service": "dashboard"

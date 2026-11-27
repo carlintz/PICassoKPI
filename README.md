@@ -16,7 +16,7 @@ python app.py
 
 기본 포트는 8765입니다. 단일 프로세스로 실행하며, 배포 시 접근 제어가 적용된 내부 서비스로 운영합니다. `PORT`와 `PICASSO_HOST`로 바인딩을 조정할 수 있습니다. 수집 기록과 대상 이미지는 기본적으로 `.local/`에 저장됩니다. 배포 시 `PICASSO_DATA`를 영구 저장소로 지정하세요.
 
-설정에서 매일 자동 수집 시각(한국 시간)을 지정합니다. 해당 시각에 서버가 꺼져 있으면 당일 서버가 켜졌을 때 수집합니다. 수집이 실패하면 화면에서 오류를 확인하고 다시 실행할 수 있습니다.
+수집 설정에서 한국 시간 기준으로 매일, 매주, 매월 또는 특정 날짜 1회 수집 일정을 저장합니다. 실행 기록에서 결과와 실패 원인을 확인할 수 있습니다. 예약 시각에 다른 수집이 진행 중이면 완료 후 시도합니다.
 
 ## 집계 기준
 
@@ -41,4 +41,6 @@ python app.py
 
 Supabase 프로젝트에 `supabase/migrations/`를 적용합니다. 상품과 수집 기록은 Postgres에 저장하고, 수집한 썸네일과 운영자가 등록한 기준 이미지는 비공개 Storage 버킷에 저장합니다. 초기 검증 샘플의 썸네일은 브랜드 CDN에서 불러옵니다.
 
-Vercel 프로덕션 환경에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PICASSO_WORKER_KEY`, `PICASSO_OPERATOR_PASSWORD`를 설정합니다. 키와 암호는 서버 환경에만 보관합니다. 자동 실행은 보류 상태이며, 운영자는 한국 시간 기준 예정 시각을 저장할 수 있습니다. 기준 이미지는 한 장당 4MB 미만으로 올립니다.
+Vercel 프로덕션 환경에는 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PICASSO_WORKER_KEY`, `PICASSO_OPERATOR_PASSWORD`를 설정합니다. 키와 암호는 서버 환경에만 보관합니다. 기준 이미지는 한 장당 4MB 미만으로 올립니다.
+
+운영 일정 실행을 활성화할 때는 `PICASSO_SCHEDULER_KEY`를 Vercel 서버에, 같은 값을 `picasso_scheduler_key` 이름으로 Supabase Vault에 설정합니다. 사전 마이그레이션과 앱 배포 후 `supabase/enable_schedule.sql`을 적용하면 Supabase Cron이 1분마다 예약을 확인하고 Vercel Queues에 수집을 전달합니다. 운영자는 수집 설정에서 실제 실행 일정을 선택합니다.

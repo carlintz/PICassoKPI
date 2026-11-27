@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
@@ -241,11 +241,25 @@ def who_code(url, budget=0):
     return code or who_mobile_tag_code(url)
 
 
+class ProductListError(Exception):
+    pass
+
+
 def list_products():
     products = {}
+
     def read_tab(brand, tab, category):
         loader = spao_list if brand == "SPAO" else who_list
-        return list(loader(tab, category))
+        label = f"{'스파오' if brand == 'SPAO' else '후아유'} {tab}"
+        try:
+            return list(loader(tab, category))
+        except HTTPError as error:
+            raise ProductListError(f"{label} 공식몰 응답 오류 (HTTP {error.code})") from error
+        except (TimeoutError, URLError, OSError) as error:
+            detail = "응답 시간 초과" if isinstance(error, TimeoutError) or isinstance(getattr(error, "reason", None), TimeoutError) else "연결 오류"
+            raise ProductListError(f"{label} 공식몰 {detail}") from error
+        except (KeyError, IndexError, ValueError, TypeError) as error:
+            raise ProductListError(f"{label} 공식몰 상품 목록 형식 오류") from error
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         tabs = [pool.submit(read_tab, brand, tab, category)
@@ -258,7 +272,7 @@ def list_products():
                     if label not in existing["tabs"]:
                         existing["tabs"].append(label)
     if not products:
-        raise ValueError("No products received")
+        raise ProductListError("공식몰에서 상품을 가져오지 못했습니다.")
 
     return list(products.values())
 

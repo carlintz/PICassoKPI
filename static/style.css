@@ -475,6 +475,23 @@ form .primary { margin-top: 12px; font-size: 13px; }
 }
 #reference-upload-status { overflow-wrap: anywhere; }
 
+#schedule fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+#schedule-weekdays legend { margin-bottom: 7px; font-size: 14px; }
+.schedule-days { display: flex; flex-wrap: wrap; gap: 6px; }
+.schedule-days label { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 13px; }
+#schedule-month-day { width: 84px; }
+#schedule-next { margin-top: 13px; color: var(--blue); font-weight: 700; }
+.schedule-log-panel { grid-column: 1 / -1; }
+.schedule-log-panel .table-scroll table { min-width: 730px; }
+.schedule-log-panel th, .schedule-log-panel td { text-align: left; }
+.schedule-log-panel td:last-child { width: 35%; overflow-wrap: anywhere; }
+.schedule-log-panel button { font-size: 13px; }
+.schedule-log-pages { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 12px; }
+.schedule-log-pages span { color: var(--muted); font-size: 13px; }
+.schedule-result { color: var(--blue); font-weight: 700; white-space: nowrap; }
+.schedule-result[data-status=warning] { color: var(--orange); }
+.schedule-result[data-status=failed] { color: var(--error); }
+
 dialog {
   width: min(460px, 94vw);
   padding: 20px;

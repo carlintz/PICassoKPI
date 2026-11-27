@@ -1,5 +1,5 @@
 import {send} from "@vercel/queue";
-import {topic, worker} from "../worker.mjs";
+import {failRun, topic, worker} from "../worker.mjs";
 
 export async function POST(request) {
   if (request.headers.get("X-PICasso-Request") !== "1") {
@@ -12,7 +12,7 @@ export async function POST(request) {
     try {
       await send(topic, {run: result.id}, {idempotencyKey: result.id + ":plan"});
     } catch {
-      await worker("/internal/fail/" + result.id);
+      await failRun(result.id, "enqueue", "수집 시작 요청을 대기열에 등록할 수 없습니다.");
       throw new Error("Queue publish failed");
     }
     return Response.json({ok: true, id: result.id}, {status: 202});
