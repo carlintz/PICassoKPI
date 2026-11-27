@@ -64,10 +64,14 @@ def product_rows(run_id, keys=None, select="result"):
     return all_rows("picasso_products", filters)
 
 
-def reference_rows(embeddings=False):
+def reference_rows(embeddings=False, brand=None, group=None):
     columns = "brand,reference_group,storage_path"
-    return all_rows("picasso_references", {"select": columns + (",embedding" if embeddings else ""),
-                                         "order": columns})
+    filters = {"select": columns + (",embedding" if embeddings else ""), "order": columns}
+    if brand is not None:
+        filters["brand"] = f"eq.{brand}"
+    if group is not None:
+        filters["reference_group"] = f"eq.{group}"
+    return all_rows("picasso_references", filters)
 
 
 def all_rows(table, filters):

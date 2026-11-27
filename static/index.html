@@ -113,10 +113,11 @@
         <table aria-label="등록된 기준 이미지 수">
           <thead><tr><th scope="col">브랜드</th><th scope="col">남성</th><th scope="col">여성</th></tr></thead>
           <tbody>
-            <tr><th scope="row">스파오</th><td data-reference-count="SPAO:men">—</td><td data-reference-count="SPAO:women">—</td></tr>
-            <tr><th scope="row">후아유</th><td data-reference-count="WHO:men">—</td><td data-reference-count="WHO:women">—</td></tr>
+            <tr><th scope="row">스파오</th><td><button class="reference-count" type="button" data-reference-count="SPAO:men" disabled>—</button></td><td><button class="reference-count" type="button" data-reference-count="SPAO:women" disabled>—</button></td></tr>
+            <tr><th scope="row">후아유</th><td><button class="reference-count" type="button" data-reference-count="WHO:men" disabled>—</button></td><td><button class="reference-count" type="button" data-reference-count="WHO:women" disabled>—</button></td></tr>
           </tbody>
         </table>
+        <p id="reference-preview-hint" hidden>등록 장수를 누르면 이미지를 미리 볼 수 있습니다.</p>
         <form id="reference" class="settings-form">
           <fieldset disabled>
             <div class="settings-fields">
@@ -231,7 +232,7 @@
           <ol>
             <li>운영자 로그인 후 <strong>수집 설정 → 기준 얼굴 이미지</strong>에서 브랜드와 <strong>기준 얼굴 그룹</strong>을 선택합니다.</li>
             <li>한 사람의 얼굴이 선명하게 보이는 이미지를 선택합니다. 한 장당 4MB 미만이며, 같은 브랜드와 그룹에 여러 장을 한 번에 추가할 수 있습니다.</li>
-            <li><strong>기준 이미지 추가</strong>를 누르고 표에서 등록 장수를 확인합니다. 새 기준은 다음 수집부터 해당 브랜드의 남성과 여성 상품 탭에 모두 적용됩니다.</li>
+            <li><strong>기준 이미지 추가</strong>를 누르고 표에서 등록 장수를 확인합니다. 장수를 누르면 해당 브랜드·그룹의 등록 이미지 미리보기가 열립니다. 새 기준은 다음 수집부터 해당 브랜드의 남성과 여성 상품 탭에 모두 적용됩니다.</li>
           </ol>
           <p>얼굴이 보이는 썸네일은 같은 브랜드에 등록된 모든 기준 얼굴과 비교합니다. 결과는 가장 높은 유사도를 기준으로 분류하며, 여러 기준과 일치한 상품도 집계에서 한 번만 셉니다.</p>
           <h3>자동 수집 예약과 실행 기록</h3>
@@ -271,6 +272,13 @@
   <p id="login-error" role="alert"></p>
   <button class="primary">로그인</button>
 </form>
+</dialog>
+<dialog id="reference-preview" aria-labelledby="reference-preview-title">
+  <div class="panel-title">
+    <div><h2 id="reference-preview-title">기준 얼굴 이미지</h2><p id="reference-preview-status" role="status"></p></div>
+    <button id="close-reference-preview" type="button" aria-label="기준 이미지 미리보기 닫기">×</button>
+  </div>
+  <div id="reference-preview-gallery"></div>
 </dialog>
 <dialog id="edit"><form id="review"><div class="panel-title"><h2 id="edit-name"></h2><button type="button" id="close" aria-label="닫기">×</button></div>
 <img id="edit-image" alt="대표 썸네일"><a id="detail" target="_blank" rel="noopener">공식몰에서 보기 ↗</a><p id="item-error"></p>

@@ -19,10 +19,12 @@ from flask import Flask, Response, jsonify, request, session
 
 import cloud_store as db
 from collect import ProductListError, list_products, process_product
-from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts
+from references import (GROUPS, REFERENCE_FILENAME, REFERENCE_PREVIEW_HEADERS, REFERENCE_PREVIEW_PREFIX,
+                        changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts,
+                        reference_filenames)
 from reviews import apply_review, review_changes
 from schedule_rules import FAILURE_STAGES, LOG_PAGE_SIZE, advance_schedule, failure_reason, is_due, parse_schedule, schedule_value
-from snapshots import INVALID_COMPARISON, public, seed_snapshot, weekly_public
+from snapshots import INVALID_COMPARISON, TABS, public, seed_snapshot, weekly_public
 from vision import Vision
 
 app = Flask(__name__, static_url_path="/static")
@@ -48,11 +50,20 @@ def authorize():
     if request.path.startswith("/internal/"):
         if not equals(request.headers.get("X-Picasso-Worker", ""), os.environ.get("PICASSO_WORKER_KEY", "")):
             return jsonify(error="찾을 수 없습니다."), 404
+    elif request.path.startswith(REFERENCE_PREVIEW_PREFIX) and not session.get("operator"):
+        return jsonify(error="운영자 로그인이 필요합니다."), 401
     elif request.method in {"POST", "PATCH"}:
         if request.headers.get("X-PICasso-Request") != "1":
             return jsonify(error="대시보드에서 요청을 다시 실행하세요."), 403
         if request.path != "/api/login" and not session.get("operator"):
             return jsonify(error="운영자 로그인이 필요합니다."), 401
+
+
+@app.after_request
+def protect_reference_preview(response):
+    if request.path.startswith(REFERENCE_PREVIEW_PREFIX):
+        response.headers.update(REFERENCE_PREVIEW_HEADERS)
+    return response
 
 
 @app.errorhandler(db.StoreError)
@@ -216,6 +227,35 @@ def reference():
     inserted = db.rest("picasso_references", method="POST", body=entry,
                        headers={"Prefer": "resolution=ignore-duplicates,return=representation"})
     return jsonify(ok=True, added=bool(inserted))
+
+
+@app.get("/api/reference/<brand>/<group>")
+def reference_preview(brand, group):
+    if brand not in TABS or group not in GROUPS:
+        return jsonify(error="기준 이미지 그룹을 찾을 수 없습니다."), 404
+    entries = db.reference_rows(brand=brand, group=group)
+    if (brand, group) == ("WHO", "women"):
+        legacy = db.setting("reference")
+        if legacy:
+            entries.append(legacy_entry(legacy))
+    return jsonify(images=reference_filenames(entries, brand, group))
+
+
+@app.get("/api/reference/<brand>/<group>/<filename>")
+def reference_image(brand, group, filename):
+    if brand not in TABS or group not in GROUPS or not REFERENCE_FILENAME.fullmatch(filename):
+        return "", 404
+    path = "reference/" + filename
+    entry = db.first("picasso_references", brand=f"eq.{brand}", reference_group=f"eq.{group}",
+                     storage_path=f"eq.{path}", select="storage_path")
+    if not entry and ((brand, group) != ("WHO", "women") or path != db.setting("reference")):
+        return "", 404
+    try:
+        return Response(db.get_image(path), mimetype="image/jpeg")
+    except db.StoreError as error:
+        if error.status == 404:
+            return "", 404
+        raise
 
 
 @app.patch("/api/runs/<run_id>/product")

@@ -1,5 +1,6 @@
 import hashlib
 import io
+import re
 
 from PIL import Image, ImageOps
 
@@ -7,6 +8,9 @@ from snapshots import TABS
 from vision import Vision
 
 GROUPS = ("men", "women")
+REFERENCE_FILENAME = re.compile(r"[a-f0-9]{64}\.jpg")
+REFERENCE_PREVIEW_PREFIX = "/api/reference/"
+REFERENCE_PREVIEW_HEADERS = {"Cache-Control": "private, no-store", "Cross-Origin-Resource-Policy": "same-origin"}
 
 
 def prepare_reference(form, files, models):
@@ -52,6 +56,18 @@ def reference_counts(entries):
         counts[entry["brand"]][entry["reference_group"]].add(entry["storage_path"])
     return {brand: {group: len(paths) for group, paths in groups.items()}
             for brand, groups in counts.items()}
+
+
+def reference_filenames(entries, brand, group):
+    names = set()
+    for entry in entries:
+        if entry["brand"] == brand and entry["reference_group"] == group:
+            path = entry["storage_path"]
+            if path.startswith("reference/"):
+                filename = path.removeprefix("reference/")
+                if REFERENCE_FILENAME.fullmatch(filename):
+                    names.add(filename)
+    return sorted(names)
 
 
 def changed_brands(entries, previous):

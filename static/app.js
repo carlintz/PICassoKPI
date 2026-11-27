@@ -4,6 +4,7 @@ const esc = value => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<"
 const number = value => value.toLocaleString("ko-KR");
 const pct = (n, d) => d ? (100 * n / d).toFixed(1) + "%" : "—";
 const brands = {SPAO: "스파오", WHO: "후아유"};
+const referenceGroups = {men: "남성", women: "여성"};
 const kinds = {
   product_only: "상품 단독컷", model: "일반 모델 착장컷", similar: "AI 모델 착장컷", review: "검토 필요"
 };
@@ -13,11 +14,12 @@ const titles = {overview: "신상품 썸네일 현황", products: "상품 검토
 const seedId = "20261124-000000-seed";
 const pageSize = 30;
 const selection = new Set();
-let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, collectAfterLogin = false;
+let demo, state, current, editing, page = 0, lastJob, syncing = false, uploading = false, loginAction;
 let savingBulk = false;
 let weekly, weeklyCatalog;
 let weeklyRuns = [];
 let scheduleDirty = false, logPage = 1, logRequest, loggedJob;
+let referencePreviewRequest;
 
 async function api(url, options = {}) {
   const headers = new Headers(options.headers);
@@ -298,16 +300,48 @@ function edit(row) {
   $("edit").showModal();
 }
 function renderReferences() {
-  for (const cell of document.querySelectorAll("[data-reference-count]")) {
-    const [brand, group] = cell.dataset.referenceCount.split(":");
-    cell.textContent = number(state.references?.[brand]?.[group] ?? 0) + "장";
+  let hasPreview = false;
+  for (const button of document.querySelectorAll("[data-reference-count]")) {
+    const [brand, group] = button.dataset.referenceCount.split(":");
+    const count = state.references?.[brand]?.[group] ?? 0;
+    const label = `${number(count)}장`;
+    button.textContent = label;
+    button.setAttribute("aria-label", `${brands[brand]} ${referenceGroups[group]} 기준 얼굴 이미지 ${label} 미리보기`);
+    button.disabled = Boolean(demo) || count === 0;
+    if (!button.disabled) hasPreview = true;
   }
+  $("reference-preview-hint").hidden = !hasPreview;
   const message = demo ? "수집 서버 연결 후 기준 이미지를 등록할 수 있습니다."
     : state.operator === false ? "운영자 로그인 후 기준 이미지를 등록할 수 있습니다."
     : !state.vision ? "얼굴 분석 모델을 사용할 수 없습니다."
     : state.job.state === "running" ? "수집 완료 후 기준 이미지를 등록할 수 있습니다." : "";
   $("reference").querySelector("fieldset").disabled = Boolean(message) || uploading;
   $("reference-status").textContent = message;
+}
+async function showReferencePreview(brand, group) {
+  const dialog = $("reference-preview");
+  const status = $("reference-preview-status");
+  const gallery = $("reference-preview-gallery");
+  const title = `${brands[brand]} ${referenceGroups[group]} 기준 얼굴 이미지`;
+  const url = `/api/reference/${encodeURIComponent(brand)}/${encodeURIComponent(group)}`;
+  const request = {};
+  referencePreviewRequest = request;
+  $("reference-preview-title").textContent = title;
+  status.textContent = "등록된 이미지를 불러오는 중입니다.";
+  gallery.replaceChildren();
+  dialog.showModal();
+  try {
+    const {images} = await api(url);
+    if (referencePreviewRequest !== request) return;
+    status.textContent = images.length ? `${number(images.length)}장 · 이미지를 선택하면 크게 볼 수 있습니다.` : "등록된 이미지가 없습니다.";
+    gallery.innerHTML = images.map((file, index) => {
+      const imageUrl = esc(`${url}/${encodeURIComponent(file)}`);
+      const label = esc(`${title} ${index + 1}`);
+      return `<a class="reference-preview-tile" href="${imageUrl}" target="_blank" rel="noopener noreferrer" aria-label="${label} 크게 보기"><img src="${imageUrl}" alt="${label}" loading="lazy"></a>`;
+    }).join("");
+  } catch (error) {
+    if (referencePreviewRequest === request) status.textContent = error.message;
+  }
 }
 function showScheduleFields() {
   const cadence = $("schedule-cadence").value;
@@ -449,13 +483,13 @@ async function collectNow() {
   await send("/api/collect", {});
   await sync();
 }
-function openLogin(startCollection) {
-  collectAfterLogin = startCollection;
+function openLogin(onSuccess) {
+  loginAction = onSuccess;
   $("login-error").textContent = "";
   $("login-form").reset();
   $("login-dialog").showModal();
 }
-$("operator-login").onclick = () => openLogin(false);
+$("operator-login").onclick = () => openLogin();
 $("close-login").onclick = () => $("login-dialog").close();
 $("login-form").onsubmit = async e => {
   e.preventDefault();
@@ -463,16 +497,32 @@ $("login-form").onsubmit = async e => {
   try {
     await send("/api/login", {password: input.value});
     input.value = "";
+    const onSuccess = loginAction;
+    loginAction = undefined;
     $("login-dialog").close();
     await action(async () => {
       await sync();
-      if (collectAfterLogin) await collectNow();
+      if (onSuccess) await onSuccess();
     });
   } catch (error) {
     $("login-error").textContent = error.message;
   }
 };
-$("collect").onclick = () => state?.operator === false ? openLogin(true) : action(collectNow);
+$("collect").onclick = () => state?.operator === false ? openLogin(collectNow) : action(collectNow);
+document.querySelectorAll("[data-reference-count]").forEach(button => {
+  button.onclick = () => {
+    const [brand, group] = button.dataset.referenceCount.split(":");
+    const openPreview = () => showReferencePreview(brand, group);
+    if (state?.operator === false) openLogin(openPreview);
+    else openPreview();
+  };
+});
+$("close-reference-preview").onclick = () => $("reference-preview").close();
+$("reference-preview").onclose = () => {
+  if ($("reference-preview").open) return;
+  referencePreviewRequest = undefined;
+  $("reference-preview-gallery").replaceChildren();
+};
 function showSimilar(tab = "") {
   $("tab-filter").value = tab;
   $("kind-filter").value = "similar";

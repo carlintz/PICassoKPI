@@ -14,7 +14,9 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 from PIL import Image, ImageOps
 
 from collect import ProductListError, TABS, collect, fetch
-from references import changed_brands, legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_path
+from references import (GROUPS, REFERENCE_PREVIEW_HEADERS, REFERENCE_PREVIEW_PREFIX, changed_brands,
+                        legacy_embedding, legacy_entry, prepare_reference, reference_counts, reference_filenames,
+                        reference_path)
 from reviews import apply_review, review_changes
 from schedule_rules import LOG_PAGE_SIZE, SEOUL, advance_schedule, failure_reason, is_due, next_occurrence, parse_schedule, schedule_value
 from snapshots import SEED_ID, local_weekly, public, seed_snapshot
@@ -48,6 +50,13 @@ def protect_workspace():
                             {"WWW-Authenticate": 'Basic realm="PICasso KPI", charset="UTF-8"'})
     if request.method in {"POST", "PATCH", "PUT", "DELETE"} and request.headers.get("X-PICasso-Request") != "1":
         return jsonify(error="대시보드에서 요청을 다시 실행하세요."), 403
+
+
+@app.after_request
+def protect_reference_preview(response):
+    if request.path.startswith(REFERENCE_PREVIEW_PREFIX):
+        response.headers.update(REFERENCE_PREVIEW_HEADERS)
+    return response
 
 
 def load(path, default=None):
@@ -273,6 +282,26 @@ def reference():
         destination.write_bytes(content)
         save(REFERENCES, [*load(REFERENCES, []), entry])
     return jsonify(ok=True, added=True)
+
+
+@app.get("/api/reference/<brand>/<group>")
+def reference_preview(brand, group):
+    if brand not in TABS or group not in GROUPS:
+        return jsonify(error="기준 이미지 그룹을 찾을 수 없습니다."), 404
+    return jsonify(images=reference_filenames(reference_library(), brand, group))
+
+
+@app.get("/api/reference/<brand>/<group>/<filename>")
+def reference_image(brand, group, filename):
+    if filename not in reference_filenames(reference_library(), brand, group):
+        abort(404)
+    if (DATA / "reference" / filename).is_file():
+        return send_from_directory(DATA / "reference", filename, mimetype="image/jpeg")
+    if (brand, group) == ("WHO", "women") and REFERENCE.is_file():
+        content = REFERENCE.read_bytes()
+        if reference_path(content) == "reference/" + filename:
+            return Response(content, mimetype="image/jpeg")
+    abort(404)
 
 
 @app.patch("/api/runs/<run_id>/product")
