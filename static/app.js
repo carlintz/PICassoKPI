@@ -9,7 +9,7 @@ const kinds = {
 };
 const generalModels = summary => summary.model - summary.match - summary.unclear;
 const needsReview = summary => summary.unknown + summary.unclear;
-const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정"};
+const titles = {overview: "신상품 썸네일 현황", products: "상품 검토", settings: "수집 설정", guide: "사용 매뉴얼"};
 const seedId = "20261124-000000-seed";
 const pageSize = 30;
 const selection = new Set();
@@ -44,7 +44,9 @@ function date(value) {
   }).format(new Date(value)) : value;
 }
 function go() {
-  const active = location.hash.slice(1) in titles ? location.hash.slice(1) : "overview";
+  const hash = location.hash.slice(1);
+  const guideSection = hash.startsWith("guide-") ? $(hash) : null;
+  const active = guideSection?.classList.contains("guide-section") ? "guide" : Object.hasOwn(titles, hash) ? hash : "overview";
   for (const key of Object.keys(titles)) {
     $(key).hidden = key !== active;
     document.querySelector(`[data-page="${key}"]`).setAttribute("aria-current", key === active ? "page" : "false");
@@ -52,6 +54,12 @@ function go() {
   $("title").textContent = titles[active];
   if (active === "products") gallery();
   if (active === "overview") loadWeekly();
+  if (active === "guide" && guideSection) {
+    guideSection.focus({preventScroll: true});
+    guideSection.scrollIntoView({block: "start"});
+  } else if (active === "guide") {
+    window.scrollTo(0, 0);
+  }
 }
 async function select(id) {
   if (!id) return;

@@ -14,6 +14,7 @@
     <a href="#overview" data-page="overview"><span aria-hidden="true">◫</span> 대시보드</a>
     <a href="#products" data-page="products"><span aria-hidden="true">▤</span> 상품 검토</a>
     <a href="#settings" data-page="settings"><span aria-hidden="true">&#x2699;&#xFE0E;</span> 수집 설정</a>
+    <a href="#guide" data-page="guide"><span aria-hidden="true">▧</span> 사용 매뉴얼</a>
   </nav>
   <div class="aside-footer">SPAO · WHO.A.U</div>
 </aside>
@@ -100,6 +101,119 @@
         <p id="reference-upload-status" role="status"></p>
       </form>
     </article>
+  </section>
+  <section id="guide" aria-label="사용 매뉴얼" hidden>
+    <div class="guide-layout">
+      <nav class="panel guide-toc" aria-label="매뉴얼 목차">
+        <h2>목차</h2>
+        <a href="#guide-start">처음 사용하기</a>
+        <a href="#guide-collect">상품 수집하기</a>
+        <a href="#guide-dashboard">대시보드 읽기</a>
+        <a href="#guide-review">상품 검토 및 수정</a>
+        <a href="#guide-settings">기준 이미지와 수집 설정</a>
+        <a href="#guide-csv">CSV 내려받기</a>
+        <a href="#guide-faq">자주 묻는 질문</a>
+      </nav>
+      <div class="guide-content">
+        <section id="guide-start" class="panel guide-section guide-intro" tabindex="-1" aria-labelledby="guide-start-title">
+          <h2 id="guide-start-title">처음 사용하기</h2>
+          <p>PICASSO AI KPI Monitor는 스파오와 후아유 공식몰의 신상품 대표 썸네일을 수집합니다. 어떤 상품이 새로 들어왔는지, 전체 모델 착장컷에서 AI 모델 착장컷이 차지하는 비중이 얼마인지 회차별로 확인할 수 있습니다.</p>
+          <ol>
+            <li><strong>최근 결과 보기.</strong> 대시보드에서 최근 1주일간 신규 상품과 전체 상품 현황을 확인합니다.</li>
+            <li><strong>작업 준비하기.</strong> 운영 사이트에서 변경 작업을 하려면 상단의 <strong>운영자 로그인</strong>을 선택합니다. 수집 설정에서 브랜드별 기준 얼굴 등록 장수를 확인하고 필요한 사진을 추가합니다.</li>
+            <li><strong>새 데이터 가져오기.</strong> 상단의 <strong>지금 수집</strong>을 누릅니다. 완료 메시지가 뜨면 새 회차의 대시보드를 확인합니다.</li>
+            <li><strong>결과 검토하기.</strong> 상품 검토에서 <strong>검토 필요</strong>와 <strong>스타일코드 미확인</strong>을 확인하고, 필요하면 수정한 뒤 CSV를 내려받습니다.</li>
+          </ol>
+          <p class="guide-note">수집 기록 조회, 상품 검색, CSV 다운로드는 접속 후 바로 사용할 수 있습니다. 새 수집, 분류 및 스타일코드 수정, 설정 저장은 운영자 작업입니다.</p>
+          <div class="guide-links"><a href="#overview">대시보드 열기 →</a><a href="#settings">수집 설정 열기 →</a></div>
+        </section>
+
+        <section id="guide-collect" class="panel guide-section" tabindex="-1" aria-labelledby="guide-collect-title">
+          <h2 id="guide-collect-title">상품 수집하기</h2>
+          <p>스파오는 <strong>우먼·맨</strong> 신상품 탭에서 탭별 최대 100개를, 후아유는 <strong>WOMEN·MEN</strong> 신상품 탭의 전체 목록을 가져옵니다. 각 상품의 대표 썸네일, 상품명, 스타일코드, 공식몰 링크를 수집합니다.</p>
+          <ol>
+            <li>상단의 <strong>지금 수집</strong>을 누릅니다. 로그인 창이 뜨면 운영자 암호를 입력하면 수집이 시작됩니다.</li>
+            <li><strong>수집·분류 중</strong> 메시지에서 진행 건수를 확인합니다. 이 단계에서 이미지 수집, 스타일코드 확인, 썸네일 분류가 진행됩니다.</li>
+            <li><strong>수집을 완료했습니다</strong>가 표시되면 대시보드에서 최신 회차를 확인합니다. 이전 결과는 <strong>전체 상품 현황</strong>의 <strong>집계 기록</strong>이나 하단의 <strong>최근 집계</strong>에서 열 수 있습니다.</li>
+          </ol>
+        </section>
+
+        <section id="guide-dashboard" class="panel guide-section" tabindex="-1" aria-labelledby="guide-dashboard-title">
+          <h2 id="guide-dashboard-title">대시보드 읽기</h2>
+          <h3>최근 1주일간 신규 상품 모니터링</h3>
+          <ol>
+            <li><strong>집계 기록</strong>에서 확인할 완료 회차를 고릅니다. 처음에는 최신 완료 기록이 선택됩니다.</li>
+            <li><strong>비교 기록</strong>에서 <strong>최근 7일 자동 비교</strong>를 쓰거나 집계 기록보다 앞선 회차를 선택합니다. 자동 비교는 선택한 집계 시점까지 7일간 처음 확인된 스타일코드를 모읍니다. 직접 선택하면 두 회차의 스타일코드를 비교해 집계 기록에 새로 나타난 상품을 셉니다.</li>
+            <li><strong>전체 브랜드·스파오·후아유</strong> 중 원하는 범위를 선택합니다. 신규 상품 수와 상품 단독컷, 일반 모델 착장컷, AI 모델 착장컷을 볼 수 있습니다.</li>
+          </ol>
+          <p>신규 집계에서는 스타일코드가 확인된 상품을 같은 브랜드 안에서 코드당 한 번씩 셉니다. 완료된 공식몰 수집 기록이 두 건 이상 있어야 비교 결과가 표시됩니다.</p>
+          <h3>전체 상품 현황과 브랜드 차트</h3>
+          <p><strong>전체 상품 현황</strong>의 집계 기록은 위쪽 신규 모니터링과 별도로 선택합니다. 같은 브랜드에서 두 탭에 노출된 상품은 브랜드 합계에서 상품 ID당 한 건으로 셉니다.</p>
+          <ul>
+            <li><strong>상품 단독컷 비중</strong>은 해당 집계의 상품 단독컷 수를 전체 상품 수로 나눈 값입니다.</li>
+            <li><strong>일반 모델과 AI 모델 착장컷 비중</strong>은 각각의 상품 수를 전체 모델 착장컷 수로 나눈 값입니다. 전체 모델 착장컷에는 얼굴이 검출됐고 검토가 필요한 상품도 포함됩니다.</li>
+            <li><strong>브랜드별 썸네일 구성</strong>의 도넛 가운데에서 AI 비중과 건수를 읽습니다. 예를 들어 AI 30개와 전체 모델 40개면 75%입니다. 브랜드의 <strong>AI 상품 보기</strong>나 탭별 비중을 누르면 해당 썸네일 목록으로 이동합니다.</li>
+            <li><strong>AI 모델 착장컷</strong> 표에는 탭별로 전체 상품 대비 비중과 전체 모델 착장컷 대비 비중이 함께 표시됩니다.</li>
+          </ul>
+          <h3>썸네일 분류의 의미</h3>
+          <dl class="guide-definitions">
+            <div><dt>상품 단독컷</dt><dd>대표 썸네일에서 얼굴이 검출되지 않은 상품입니다. 얼굴이 나오지 않는 착장 사진도 포함됩니다.</dd></div>
+            <div><dt>일반 모델 착장컷</dt><dd>얼굴이 확인됐으며 운영자 검토나 기준 얼굴 비교 결과에 따라 일반 모델로 분류된 상품입니다. 기준 이미지가 아직 없는 브랜드의 착장컷도 여기에 표시됩니다.</dd></div>
+            <div><dt>AI 모델 착장컷</dt><dd>같은 브랜드의 기준 얼굴과 유사하다고 판정됐거나 운영자가 AI 모델로 분류한 상품입니다. 실제 PICASSO 적용 여부를 확인하려면 제작 이력을 대조합니다.</dd></div>
+            <div><dt>검토 필요</dt><dd>얼굴 유사도가 경계 범위에 있거나 이미지 수집·분석 결과를 확인해야 하는 상품입니다.</dd></div>
+          </dl>
+        </section>
+
+        <section id="guide-review" class="panel guide-section" tabindex="-1" aria-labelledby="guide-review-title">
+          <h2 id="guide-review-title">상품 검토 및 수정</h2>
+          <p><strong>대시보드 → 전체 상품 현황</strong>에서 검토할 집계 기록을 먼저 고릅니다. 사이드 메뉴의 <strong>상품 검토</strong>에서 상품명, 상품 ID, 스타일코드로 검색하거나 브랜드·탭과 썸네일 분류로 좁힐 수 있습니다.</p>
+          <h3>한 상품 수정하기</h3>
+          <ol>
+            <li>상품 카드를 눌러 대표 썸네일과 현재 분류를 확인합니다. 필요한 경우 <strong>공식몰에서 보기</strong>에서 상품 정보를 대조합니다.</li>
+            <li><strong>스타일코드</strong>를 입력하거나 <strong>썸네일 분류</strong>에서 상품 단독컷, 일반 모델 착장컷, AI 모델 착장컷, 검토 필요 중 원하는 분류를 선택합니다.</li>
+            <li><strong>분류 저장</strong>을 누릅니다. 수정된 분류와 스타일코드는 선택한 집계의 대시보드와 CSV에 반영됩니다.</li>
+          </ol>
+          <h3>여러 상품을 같은 분류로 바꾸기</h3>
+          <ol>
+            <li>상품 왼쪽 위 체크박스를 누르거나 <strong>현재 페이지 전체 선택</strong>을 사용합니다.</li>
+            <li>선택 건수를 확인합니다. 페이지를 넘겨도 선택은 유지되고, 검색어·필터·집계 기록을 바꾸면 선택이 해제됩니다.</li>
+            <li><strong>분류 선택</strong>에서 적용할 항목을 고르고 <strong>일괄 분류 저장</strong>을 누릅니다. 스타일코드는 상품을 하나씩 열어 수정합니다.</li>
+          </ol>
+          <div class="guide-links"><a href="#products">상품 검토 열기 →</a></div>
+        </section>
+
+        <section id="guide-settings" class="panel guide-section" tabindex="-1" aria-labelledby="guide-settings-title">
+          <h2 id="guide-settings-title">기준 이미지와 수집 설정</h2>
+          <h3>기준 얼굴 이미지 등록</h3>
+          <ol>
+            <li>운영자 로그인 후 <strong>수집 설정 → 기준 얼굴 이미지</strong>에서 브랜드와 <strong>기준 얼굴 그룹</strong>을 선택합니다.</li>
+            <li>한 사람의 얼굴이 선명하게 보이는 이미지를 선택합니다. 한 장당 4MB 미만이며, 같은 브랜드와 그룹에 여러 장을 한 번에 추가할 수 있습니다.</li>
+            <li><strong>기준 이미지 추가</strong>를 누르고 표에서 등록 장수를 확인합니다. 새 기준은 다음 수집부터 해당 브랜드의 남성과 여성 상품 탭에 모두 적용됩니다.</li>
+          </ol>
+          <p>얼굴이 보이는 썸네일은 같은 브랜드에 등록된 모든 기준 얼굴과 비교합니다. 결과는 가장 높은 유사도를 기준으로 분류하며, 여러 기준과 일치한 상품도 집계에서 한 번만 셉니다.</p>
+          <h3>자동 수집 시각</h3>
+          <p><strong>자동 수집</strong>에서 한국 시간 기준 예정 시각을 고르고 <strong>저장</strong>을 누릅니다. 현재 운영 사이트는 자동 실행이 보류되어 있어 시각을 저장할 수 있으며, 수집은 <strong>지금 수집</strong>으로 시작합니다.</p>
+          <div class="guide-links"><a href="#settings">수집 설정 열기 →</a></div>
+        </section>
+
+        <section id="guide-csv" class="panel guide-section" tabindex="-1" aria-labelledby="guide-csv-title">
+          <h2 id="guide-csv-title">CSV 내려받기</h2>
+          <ol>
+            <li>대시보드의 <strong>전체 상품 현황</strong>에서 저장할 <strong>집계 기록</strong>을 선택합니다.</li>
+            <li>상단의 <strong>CSV</strong>를 누르면 해당 회차 전체의 파일이 내려받아집니다. 브랜드, 상품 ID, 스타일코드, 썸네일 분류, 유사도, 공식몰 주소를 포함합니다.</li>
+          </ol>
+          <p>엑셀에서 <strong>code</strong>는 스타일코드, <strong>thumbnail_type</strong>과 <strong>similarity</strong>는 분류를 구성하는 값, <strong>score</strong>는 자동 비교의 유사도 점수입니다.</p>
+        </section>
+
+        <section id="guide-faq" class="panel guide-section" tabindex="-1" aria-labelledby="guide-faq-title">
+          <h2 id="guide-faq-title">자주 묻는 질문</h2>
+          <details><summary>신규 상품 비교가 비어 있어요.</summary><p>집계 기록을 고른 뒤 앞선 공식몰 수집이 완료돼 있는지 확인합니다. 비교할 회차가 두 건 이상이면 결과를 볼 수 있으며, 초기 검증 샘플은 공식몰 비교 기록에서 제외됩니다.</p></details>
+          <details><summary>분류 저장이나 체크박스가 보이지 않아요.</summary><p>운영 사이트에서는 상단의 <strong>운영자 로그인</strong>을 먼저 사용합니다. 저장한 상품을 찾으려면 상품 검토에서 변경한 분류로 필터를 맞춥니다.</p></details>
+          <details><summary>스타일코드 미확인 상품은 어떻게 보완하나요?</summary><p><strong>상품 검토 → 스타일코드 미확인</strong>으로 필터를 맞춥니다. 상품 카드를 열어 <strong>공식몰에서 보기</strong>를 누릅니다. 후아유는 상세 페이지의 <strong>상세정보 더보기</strong>를 펼쳐 상품명 아래의 코드를 확인한 뒤 입력합니다.</p></details>
+          <details><summary>기준 이미지 추가나 수집이 실패했어요.</summary><p>기준 이미지는 파일 크기와 선명한 얼굴 한 개가 있는지 확인하고, 수집 중이면 완료 후 다시 추가합니다. 수집 자체가 실패하면 상단 상태 메시지를 확인한 뒤 <strong>지금 수집</strong>을 다시 실행할 수 있습니다.</p></details>
+        </section>
+      </div>
+    </div>
   </section>
 </main>
 <dialog id="login-dialog">
