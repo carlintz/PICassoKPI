@@ -157,18 +157,43 @@ async function loadWeekly() {
     if (weekly === request) status.textContent = "신규 상품 집계를 불러오지 못했습니다.";
   }
 }
+function renderBrandCharts(groups) {
+  $("brand-charts").innerHTML = groups.filter(g => !g.tab).map(g => {
+    const brand = brands[g.brand];
+    const share = pct(g.match, g.model);
+    const progress = g.model ? 100 * g.match / g.model : 0;
+    const ratio = `${number(g.match)} / ${number(g.model)}개`;
+    const chartLabel = `${brand} AI 모델 착장컷 ${number(g.match)}개, 전체 모델 착장컷 ${number(g.model)}개, 비중 ${share}`;
+    const tabs = groups.filter(tab => tab.brand === g.brand && tab.tab).map(tab => `
+      <a class="brand-chart-tab" href="#products" data-similar-tab="${esc(tab.brand + ":" + tab.tab)}"
+         aria-label="${esc(`${brand} ${tab.tab} AI 모델 착장컷 ${pct(tab.match, tab.model)} 보기`)}">
+        <span>${esc(tab.tab)}</span><strong>${pct(tab.match, tab.model)}</strong>
+        <small>AI ${number(tab.match)} / 모델 ${number(tab.model)}개</small>
+      </a>`).join("");
+    const counts = {product_only: g.product, model: generalModels(g), similar: g.match, review: needsReview(g)};
+    const breakdown = Object.entries(kinds).map(([kind, label]) => `
+      <div data-kind="${kind}"><dt>${esc(label)}</dt><dd>${number(counts[kind])}<small>개</small></dd></div>`).join("");
+    return `<article class="brand-chart">
+      <div class="brand-chart-heading">
+        <div><h3>${esc(brand)}</h3><span>전체 상품 ${number(g.total)}개</span></div>
+        <a href="#products" data-similar-tab="${esc(g.brand)}" aria-label="${esc(brand + " AI 모델 착장컷 보기")}">AI 상품 보기 →</a>
+      </div>
+      <div class="brand-chart-body">
+        <div class="brand-donut" style="--share: ${progress}%" role="img" aria-label="${esc(chartLabel)}">
+          <div><strong>${share}</strong><small>${ratio}</small></div>
+        </div>
+        <div class="brand-chart-tabs">${tabs}</div>
+      </div>
+      <dl class="brand-breakdown" aria-label="${esc(brand + " 분류별 상품 수")}">${breakdown}</dl>
+    </article>`;
+  }).join("");
+}
 function render() {
   if (!current) return;
   const s = current.summary;
   $("source").textContent = `${current.source} · ${number(needsReview(s))}개 검토 필요 · ${s.code}/${s.total}개 스타일코드 확인`;
   renderMetrics("metrics", s);
-  $("bars").innerHTML = current.groups.map(g => {
-    const label = g.tab || brands[g.brand];
-    const counts = [g.product, generalModels(g), g.match, needsReview(g)];
-    const detail = [label, ...Object.values(kinds).map((name, index) => `${name} ${number(counts[index])}개`)].join(" · ");
-    const parts = counts.map(n => `<i style="width:${g.total ? 100 * n / g.total : 0}%"></i>`).join("");
-    return `<div class="bar-row ${g.tab ? "sub" : ""}"><span>${esc(label)}</span><div class="bar" role="img" aria-label="${esc(detail)}" title="${esc(detail)}">${parts}</div><strong>${pct(g.match, g.model)}</strong></div>`;
-  }).join("");
+  renderBrandCharts(current.groups);
   $("comparison").innerHTML = current.groups.filter(g => g.tab).map(g =>
     `<tr><th scope="row">${esc(brands[g.brand])} ${esc(g.tab)}</th><td>${number(g.total)}</td>
       <td>${number(g.model)}</td>
@@ -390,10 +415,12 @@ function showSimilar(tab = "") {
   gallery();
 }
 $("similar-link").onclick = () => showSimilar();
-$("comparison").onclick = e => {
-  const link = e.target.closest("[data-similar-tab]");
-  if (link) showSimilar(link.dataset.similarTab);
-};
+for (const id of ["brand-charts", "comparison"]) {
+  $(id).onclick = e => {
+    const link = e.target.closest("[data-similar-tab]");
+    if (link) showSimilar(link.dataset.similarTab);
+  };
+}
 for (const id of ["search", "tab-filter", "kind-filter"]) $(id).oninput = () => {
   clearSelection();
   page = 0;
