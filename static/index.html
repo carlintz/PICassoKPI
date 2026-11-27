@@ -76,59 +76,73 @@
     </form>
     <div id="gallery"></div><div id="pagination"></div>
   </section>
-  <section id="settings" hidden class="split">
-    <article class="panel"><div class="panel-title"><div><h2>자동 수집</h2><p id="schedule-note">예약 설정을 불러오는 중입니다.</p></div></div>
-      <form id="schedule">
-        <fieldset id="schedule-fields" disabled>
-          <label class="field">자동 수집 사용 <input id="enabled" type="checkbox"></label>
-          <label class="field">수집 주기 <select id="schedule-cadence"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option><option value="once">특정 날짜 1회</option></select></label>
-          <fieldset id="schedule-weekdays" hidden disabled>
-            <legend>수집 요일</legend>
-            <div class="schedule-days">
-              <label><input type="checkbox" value="1"> 월</label><label><input type="checkbox" value="2"> 화</label>
-              <label><input type="checkbox" value="3"> 수</label><label><input type="checkbox" value="4"> 목</label>
-              <label><input type="checkbox" value="5"> 금</label><label><input type="checkbox" value="6"> 토</label>
-              <label><input type="checkbox" value="7"> 일</label>
+  <section id="settings" hidden>
+    <div class="settings-columns">
+      <article class="panel settings-panel" aria-labelledby="schedule-title">
+        <div class="panel-title"><div><h2 id="schedule-title">자동 수집</h2><p id="schedule-note">예약 설정을 불러오는 중입니다.</p></div></div>
+        <form id="schedule" class="settings-form">
+          <fieldset id="schedule-fields" disabled>
+            <label class="settings-toggle">자동 수집 사용 <input id="enabled" type="checkbox"></label>
+            <div class="settings-fields">
+              <label>수집 주기 <select id="schedule-cadence"><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option><option value="once">특정 날짜 1회</option></select></label>
+              <label>수집 시각 · 한국 시간 <input id="time" type="time" required></label>
+            </div>
+            <fieldset id="schedule-weekdays" hidden disabled>
+              <legend>수집 요일</legend>
+              <div class="schedule-days">
+                <label><input type="checkbox" value="1"> 월</label><label><input type="checkbox" value="2"> 화</label>
+                <label><input type="checkbox" value="3"> 수</label><label><input type="checkbox" value="4"> 목</label>
+                <label><input type="checkbox" value="5"> 금</label><label><input type="checkbox" value="6"> 토</label>
+                <label><input type="checkbox" value="7"> 일</label>
+              </div>
+            </fieldset>
+            <div id="schedule-monthly" hidden>
+              <label class="settings-field">매월 수집일 <input id="schedule-month-day" type="number" min="1" max="31" required disabled></label>
+              <p>선택한 날짜가 없는 달은 건너뜁니다.</p>
+            </div>
+            <label id="schedule-once" class="settings-field" hidden>수집 날짜 <input id="schedule-date" type="date" required disabled></label>
+            <div class="settings-form-footer">
+              <p id="schedule-next" role="status"></p>
+              <button class="primary" type="submit">저장</button>
             </div>
           </fieldset>
-          <div id="schedule-monthly" hidden>
-            <label class="field">매월 수집일 <input id="schedule-month-day" type="number" min="1" max="31" required disabled></label>
-            <p>선택한 날짜가 없는 달은 건너뜁니다.</p>
-          </div>
-          <label id="schedule-once" class="field" hidden>수집 날짜 <input id="schedule-date" type="date" required disabled></label>
-          <label class="field">수집 시각 · 한국 시간 <input id="time" type="time" required></label>
-          <button class="primary" type="submit">저장</button>
-        </fieldset>
-      </form>
-      <p id="schedule-next" role="status"></p>
-    </article>
-    <article class="panel schedule-log-panel">
-      <div class="panel-title"><div><h2>자동 수집 실행 기록</h2><p id="schedule-log-status" role="status">실행 기록을 불러오는 중입니다.</p></div><button id="schedule-log-refresh" type="button">새로고침</button></div>
+        </form>
+      </article>
+      <article class="panel settings-panel" aria-labelledby="reference-title">
+        <div class="panel-title"><div><h2 id="reference-title">기준 얼굴 이미지</h2><p>브랜드별로 남성과 여성 기준 이미지를 등록합니다. 다음 수집부터 해당 브랜드의 두 탭 모두에 적용됩니다.</p></div></div>
+        <table aria-label="등록된 기준 이미지 수">
+          <thead><tr><th scope="col">브랜드</th><th scope="col">남성</th><th scope="col">여성</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">스파오</th><td data-reference-count="SPAO:men">—</td><td data-reference-count="SPAO:women">—</td></tr>
+            <tr><th scope="row">후아유</th><td data-reference-count="WHO:men">—</td><td data-reference-count="WHO:women">—</td></tr>
+          </tbody>
+        </table>
+        <form id="reference" class="settings-form">
+          <fieldset disabled>
+            <div class="settings-fields">
+              <label>브랜드 <select name="brand"><option value="SPAO">스파오</option><option value="WHO">후아유</option></select></label>
+              <label>기준 얼굴 그룹 <select name="group"><option value="men">남성</option><option value="women">여성</option></select></label>
+            </div>
+            <div class="settings-field">
+              <label for="reference-files">기준 이미지 선택</label>
+              <input id="reference-files" type="file" name="image" accept="image/*" multiple required aria-describedby="reference-help">
+              <p id="reference-help">얼굴이 한 개씩 보이는 이미지를 여러 장 선택할 수 있습니다. 한 장당 4MB 미만입니다.</p>
+            </div>
+            <div class="settings-form-footer">
+              <p id="reference-status"></p>
+              <button class="primary" type="submit">기준 이미지 추가</button>
+            </div>
+          </fieldset>
+          <p id="reference-upload-status" role="status"></p>
+        </form>
+      </article>
+    </div>
+    <article class="panel schedule-log-panel" aria-labelledby="schedule-log-title">
+      <div class="panel-title"><div><h2 id="schedule-log-title">자동 수집 실행 기록</h2><p id="schedule-log-status" role="status">실행 기록을 불러오는 중입니다.</p></div><button id="schedule-log-refresh" type="button">새로고침</button></div>
       <div id="schedule-log-table" class="table-scroll" tabindex="0" role="region" aria-label="자동 수집 실행 기록표" hidden>
         <table aria-label="자동 수집 실행 기록"><thead><tr><th scope="col">예약 시각</th><th scope="col">수집 요청</th><th scope="col">종료</th><th scope="col">결과</th><th scope="col">수집 결과 및 실패 원인</th></tr></thead><tbody id="schedule-logs"></tbody></table>
       </div>
       <div class="schedule-log-pages" hidden id="schedule-log-pages"><button id="schedule-log-prev" type="button">이전</button><span id="schedule-log-page"></span><button id="schedule-log-next" type="button">다음</button></div>
-    </article>
-    <article class="panel"><div class="panel-title"><div><h2>기준 얼굴 이미지</h2><p>브랜드별로 남성과 여성 기준 이미지를 등록합니다. 다음 수집부터 해당 브랜드의 두 탭 모두에 적용됩니다.</p></div></div>
-      <table aria-label="등록된 기준 이미지 수">
-        <thead><tr><th scope="col">브랜드</th><th scope="col">남성</th><th scope="col">여성</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">스파오</th><td data-reference-count="SPAO:men">—</td><td data-reference-count="SPAO:women">—</td></tr>
-          <tr><th scope="row">후아유</th><td data-reference-count="WHO:men">—</td><td data-reference-count="WHO:women">—</td></tr>
-        </tbody>
-      </table>
-      <form id="reference">
-        <fieldset disabled>
-          <label class="field">브랜드 <select name="brand"><option value="SPAO">스파오</option><option value="WHO">후아유</option></select></label>
-          <label class="field">기준 얼굴 그룹 <select name="group"><option value="men">남성</option><option value="women">여성</option></select></label>
-          <label for="reference-files">기준 이미지 선택</label>
-          <input id="reference-files" type="file" name="image" accept="image/*" multiple required aria-describedby="reference-help">
-          <p id="reference-help">얼굴이 한 개씩 보이는 이미지를 여러 장 선택할 수 있습니다. 한 장당 4MB 미만입니다.</p>
-          <button class="primary">기준 이미지 추가</button>
-        </fieldset>
-        <p id="reference-status"></p>
-        <p id="reference-upload-status" role="status"></p>
-      </form>
     </article>
   </section>
   <section id="guide" aria-label="사용 매뉴얼" hidden>

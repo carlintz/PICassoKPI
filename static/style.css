@@ -455,15 +455,50 @@ td a { font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
 #notice.error { border-color: #6c3939; color: var(--error); background: #331f22; }
 #login-error, #review-error, #bulk-error { color: var(--error); }
 
-.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.split > .panel { align-self: start; }
 .field { flex-wrap: wrap; margin: 13px 0; font-size: 14px; }
 .field select, .field input:not([type=checkbox]) { max-width: 100%; }
 form .primary { margin-top: 12px; font-size: 13px; }
-#reference fieldset { min-width: 0; margin: 12px 0 0; padding: 0; border: 0; }
-#reference fieldset:disabled { opacity: .72; }
-#reference label[for] { display: block; margin-top: 15px; font-size: 14px; }
-#reference input { display: block; width: 100%; margin-top: 7px; color: var(--muted); font-size: 13px; }
+
+.settings-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 292px), 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.settings-panel { display: flex; flex-direction: column; min-width: 0; margin: 0; }
+.settings-panel .panel-title { margin-bottom: 16px; }
+.settings-form { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.settings-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.settings-form > fieldset { display: flex; flex: 1; flex-direction: column; gap: 12px; }
+.settings-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr)); gap: 8px 12px; }
+.settings-fields > label, .settings-field { display: grid; min-width: 0; gap: 5px; color: var(--muted); font-size: 13px; }
+.settings-fields select, .settings-fields input, .settings-field input { width: 100%; }
+.settings-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--control);
+  font-size: 13px;
+}
+.settings-toggle input { margin: 0; }
+.settings-form-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.settings-form-footer p { flex: 1 1 140px; margin: 0; font-size: 12px; }
+.settings-form-footer p:empty, #reference-upload-status:empty { display: none; }
+.settings-form-footer .primary { margin: 0 0 0 auto; }
+#reference { margin-top: 14px; }
+#reference input[type=file] { display: block; width: 100%; color: var(--muted); font-size: 13px; }
 #reference ::file-selector-button {
   margin-right: 9px;
   padding: 7px 10px;
@@ -475,13 +510,11 @@ form .primary { margin-top: 12px; font-size: 13px; }
 }
 #reference-upload-status { overflow-wrap: anywhere; }
 
-#schedule fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-#schedule-weekdays legend { margin-bottom: 7px; font-size: 14px; }
+#schedule-weekdays legend { margin-bottom: 7px; color: var(--muted); font-size: 13px; }
 .schedule-days { display: flex; flex-wrap: wrap; gap: 6px; }
 .schedule-days label { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; font-size: 13px; }
 #schedule-month-day { width: 84px; }
-#schedule-next { margin-top: 13px; color: var(--blue); font-weight: 700; }
-.schedule-log-panel { grid-column: 1 / -1; }
+#schedule-next { color: var(--blue); font-weight: 700; }
 .schedule-log-panel .table-scroll table { min-width: 730px; }
 .schedule-log-panel th, .schedule-log-panel td { text-align: left; }
 .schedule-log-panel td:last-child { width: 35%; overflow-wrap: anywhere; }
@@ -583,7 +616,6 @@ dialog::backdrop { background: #090a0ed9; }
   .brand-mark::after { width: 10px; height: 10px; border-width: 3px; }
   .brand-name { font-size: 17px; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .split { grid-template-columns: 1fr; }
   .guide-layout { display: block; }
   .guide-toc { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .guide-toc h2 { grid-column: 1 / -1; }
