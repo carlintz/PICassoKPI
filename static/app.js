@@ -242,9 +242,10 @@ function gallery() {
   page = Math.min(page, pages - 1);
   $("filtered").textContent = `${number(filtered.length)}개 상품`;
   $("gallery").innerHTML = filtered.slice(page * pageSize, (page + 1) * pageSize).map(r => {
-    const label = kinds[classification(r)];
+    const kind = classification(r);
+    const label = kinds[kind];
     const key = esc(r.brand + ":" + r.product_id);
-    return `<div class="card-tile"><button class="card" data-product="${key}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span>${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "스타일코드 미확인")} · ${esc(r.product_id)}</small></button><label class="card-select" hidden><input type="checkbox" data-select-product="${key}" aria-label="${esc(r.name + " · " + r.product_id + " 선택")}"></label></div>`;
+    return `<div class="card-tile"><button class="card" data-product="${key}"><img src="${esc(imageUrl(r))}" alt="" loading="lazy"><span class="card-kind" data-kind="${esc(kind)}">${esc(brands[r.brand])} · ${esc(label)}</span><strong title="${esc(r.name)}">${esc(r.name)}</strong><small>${esc(r.code || "스타일코드 미확인")} · ${esc(r.product_id)}</small></button><label class="card-select" hidden><input type="checkbox" data-select-product="${key}" aria-label="${esc(r.name + " · " + r.product_id + " 선택")}"></label></div>`;
   }).join("") || "<p>조건에 맞는 상품이 없습니다.</p>";
   $("pagination").innerHTML = `<button id="prev" ${page ? "" : "disabled"}>이전</button><span>${page + 1} / ${pages}</span><button id="next" ${page + 1 < pages ? "" : "disabled"}>다음</button>`;
   renderSelection();

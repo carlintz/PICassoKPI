@@ -6,16 +6,19 @@
 </head>
 <body>
 <aside>
-  <a class="brand" href="#overview"><b>Pi</b><span>PICasso<small>KPI MONITOR</small></span></a>
+  <a class="brand" href="#overview" aria-label="PICASSO AI KPI 대시보드">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">PICASSO <em>AI</em><small>KPI MONITOR</small></span>
+  </a>
   <nav aria-label="메뉴">
-    <a href="#overview" data-page="overview"><span>◫</span> 대시보드</a>
-    <a href="#products" data-page="products"><span>▤</span> 상품 검토</a>
-    <a href="#settings" data-page="settings"><span>⚙</span> 수집 설정</a>
+    <a href="#overview" data-page="overview"><span aria-hidden="true">◫</span> 대시보드</a>
+    <a href="#products" data-page="products"><span aria-hidden="true">▤</span> 상품 검토</a>
+    <a href="#settings" data-page="settings"><span aria-hidden="true">&#x2699;&#xFE0E;</span> 수집 설정</a>
   </nav>
-  <div class="aside-footer"><i></i><span>SPAO · WHO.A.U</span></div>
+  <div class="aside-footer">SPAO · WHO.A.U</div>
 </aside>
 <main>
-  <header><div><p class="eyebrow">PICASSO / 상품 콘텐츠</p><h1 id="title">신상품 썸네일 현황</h1></div>
+  <header><h1 id="title">신상품 썸네일 현황</h1>
     <div class="actions"><button id="operator-login" hidden>운영자 로그인</button><a class="button" id="export">↓ CSV</a><button id="collect" class="primary" disabled>↻ 지금 수집</button></div>
   </header>
   <div id="notice" role="status" hidden></div>
@@ -31,12 +34,17 @@
       </div>
       <div id="weekly-metrics" class="metrics" hidden></div>
     </section>
-    <div class="scope"><label>집계 기록 <select id="runs" aria-label="전체 현황 집계 기록"></select></label><p id="source"></p></div>
-    <div id="metrics" class="metrics"></div>
+    <section class="overview-summary" aria-labelledby="overall-title">
+      <div class="scope">
+        <div><h2 id="overall-title">전체 상품 현황</h2><p id="source"></p></div>
+        <label>집계 기록 <select id="runs" aria-label="전체 현황 집계 기록"></select></label>
+      </div>
+      <div id="metrics" class="metrics"></div>
+    </section>
     <article class="panel"><div class="panel-title"><div><h2>브랜드별 썸네일 구성</h2><p>오른쪽 비율은 전체 모델 착장컷 중 AI 모델 착장컷의 비중입니다.</p></div><div class="legend"><span><i></i>상품 단독컷</span><span><i></i>일반 모델 착장컷</span><span><i></i>AI 모델 착장컷</span><span><i></i>검토 필요</span></div></div><div id="bars"></div></article>
     <article class="panel">
       <div class="panel-title"><div><h2>AI 모델 착장컷</h2><p>같은 브랜드의 기준 얼굴과 비교한 결과와 운영자 분류를 반영합니다.</p></div><a href="#products" id="similar-link">AI 모델 착장컷 보기 →</a></div>
-      <div class="table-scroll"><table aria-label="카테고리별 AI 모델 착장컷">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="AI 모델 착장컷 집계표"><table aria-label="카테고리별 AI 모델 착장컷">
         <thead><tr><th scope="col">카테고리</th><th scope="col">전체 상품</th><th scope="col">전체 모델 착장컷</th><th scope="col">AI 모델 착장컷</th><th scope="col">전체 상품 대비</th><th scope="col">전체 모델 착장컷 대비</th></tr></thead>
         <tbody id="comparison"></tbody>
       </table></div>
